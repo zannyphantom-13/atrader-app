@@ -1,0 +1,160 @@
+{
+  "expo": {
+    "name": "Atrader",
+    "slug": "atrader-app",
+    "version": "1.0.2",
+    "orientation": "portrait",
+    "icon": "./assets/v1/icon.png",
+    "scheme": "atrader",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.atrader.myapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/v1/android_foreground.png",
+        "backgroundColor": "#000000"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.atrader.myapp",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/v1/favicon.png"
+    },
+    "plugins": [
+      "./plugins/zoho-branding-plugin",
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/v1/atrader-splash-light.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "image": "./assets/v1/atrader-splash-dark.png",
+            "backgroundColor": "#000000"
+          },
+          "ios": {
+            "userInterfaceStyle": "automatic",
+            "infoPlist": {
+              "NSCameraUsageDescription": "Access your camera to take photos within a conversation",
+              "NSMicrophoneUsageDescription": "Access your microphone to transcribe voice messages in conversations"
+            }
+          }
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/MonaSans-Light.ttf",
+            "./assets/fonts/MonaSans-Regular.ttf",
+            "./assets/fonts/MonaSans-Medium.ttf",
+            "./assets/fonts/MonaSans-SemiBold.ttf",
+            "./assets/fonts/MonaSans-Bold.ttf"
+          ]
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow $(PRODUCT_NAME) to access your contacts."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "$(PRODUCT_NAME) uses your location to determine your region and display prices in your local currency with region-appropriate content."
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false,
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/v1/notification-icon.png"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for KYC face verification."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
+            "extraMavenRepos": [
+              "https://maven.zohodl.com"
+            ]
+          }
+        }
+      ],
+      [
+        "@sentry/react-native",
+        {
+          "organization": "at-dynamic-exchange-limited",
+          "project": "atrader-app"
+        }
+      ],
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "da9656cf-6cdb-43fa-b71c-b463bbf0e9d8"
+      }
+    },
+    "owner": "atrader",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/da96456cf-6cdb-43fa-b71c-b463b7bf0e9d8",
+      "fallbackToCacheTimeout": 0,
+      "enabled": true
+    }
+  }
+}

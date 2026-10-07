@@ -1,0 +1,84 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+app-example
+
+
+.env
+.env.local
+
+
+ios/sentry.properties
+android/sentry.properties
+
+
+./atex-ce49d-firebase-adminsdk-fbsvc-6f2c933513.json
+atex-ce49d-firebase-adminsdk-fbsvc-6f2c933513.json
+atrader-54ae9-firebase-adminsdk-*.json
+*-firebase-adminsdk-*.json
+
+
+
+
+./google-services.json
+google-services.json
+
+./google-services-atrader.json
+google-services-atrader.json
+
+android-service-account.json
+./android-service-account.json
+
+
+
+
+# Android
+android/
+*.apk
+*.aab
+
+# iOS  
+ios/
+*.ipa
+
+# Dependencies
+node_modules/
+
+@ameru_umera__atex-app.jks
+ameru_umera__atex-app.jks
+/@ameru_umera__atex-app.jks/
