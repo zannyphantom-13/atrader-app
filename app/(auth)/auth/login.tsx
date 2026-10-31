@@ -178,9 +178,8 @@ const Login = () => {
         }
 
         setFormData({ email: "", password: "" });
-        setTimeout(() => {
-          router.replace(paths.tabs.home);
-        }, 500);
+        // Stack.Protected in RootStack auto-navigates when isAuth=true via dispatch(setLoginSuccess()) above.
+        // Manual router.replace() causes 'navigate before Root Layout mounted' crash - removed.
       }
     } catch (error: any) {
       if (error instanceof z.ZodError) {

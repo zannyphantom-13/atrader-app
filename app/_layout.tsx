@@ -25,13 +25,27 @@ import { useFonts } from "expo-font";
 import { SplashScreen, usePathname } from "expo-router";
 import * as Updates from "expo-updates";
 import { useEffect, useState } from "react";
-import { View, useColorScheme } from "react-native";
+import { View, useColorScheme, NativeModules } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   initialWindowMetrics,
   SafeAreaProvider,
 } from "react-native-safe-area-context";
-import { KeyboardProvider } from "react-native-keyboard-controller";
+
+const isKeyboardControllerLinked = Boolean(
+  NativeModules?.KeyboardController ||
+  (global as any)?.__turboModuleProxy?.('KeyboardController')
+);
+
+let KeyboardProvider: React.ComponentType<any> = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+
+if (isKeyboardControllerLinked) {
+  try {
+    KeyboardProvider = require("react-native-keyboard-controller").KeyboardProvider;
+  } catch (e) {
+    // Fallback when native module is missing
+  }
+}
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { ThemeProvider } from "../context/ThemeProvider";

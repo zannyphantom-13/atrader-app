@@ -41,7 +41,6 @@
       "favicon": "./assets/v1/favicon.png"
     },
     "plugins": [
-      "./plugins/zoho-branding-plugin",
       "expo-router",
       [
         "expo-splash-screen",

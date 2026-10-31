@@ -11,6 +11,9 @@ config.resolver.assetExts = config.resolver.assetExts.filter(
 );
 config.resolver.sourceExts = [...config.resolver.sourceExts, "svg"];
 
+// Limit worker threads to prevent out-of-memory errors on heavy SVG assets
+config.maxWorkers = 2;
+
 config.transformer.minifierConfig = {
   compress: {
     drop_console: true, // Remove console.logs

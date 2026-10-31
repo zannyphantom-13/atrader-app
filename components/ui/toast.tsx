@@ -77,8 +77,8 @@ export const Toast: React.FC<ToastProps> = React.memo(function Toast({
         };
       case "warning":
         return {
-          icon: "#f59e0b",
-          text: "#78350f",
+          icon: "#198e07ff",
+          text: "#17ea3eff",
           background: "#fffbeb", // Very faint amber
           border: "#fbbf24", // Amber border
         };

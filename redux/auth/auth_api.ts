@@ -10,14 +10,21 @@ const API_CHECK_HOSTNAME = process.env.EXPO_PUBLIC_CHECK_HOSTNAME;
 
 export const tembele = process.env.EXPO_PUBLIC_TEMBELEE_TOKEN;
 
-const apiUrl = __DEV__ ? API_HOSTNAME : API_CHECK_HOSTNAME;
+// Fallback so requests never go to "undefined/auth/login"
+const FALLBACK_URL = "https://mover.myatraderapp.com/api";
+const apiUrl = __DEV__
+  ? (API_HOSTNAME || FALLBACK_URL)
+  : (API_CHECK_HOSTNAME || FALLBACK_URL);
 
 export const baseQuery = fetchBaseQuery({
   baseUrl: apiUrl,
   credentials: "include",
   timeout: 60000,
   prepareHeaders: (headers, { getState }) => {
-    headers.set("authorization", `Bearer ${tembele}`);
+    // Only set the header if tembele is a real token value
+    if (tembele && tembele !== "PASTE_YOUR_BEARER_TOKEN_HERE") {
+      headers.set("authorization", `Bearer ${tembele}`);
+    }
     return headers;
   },
 });

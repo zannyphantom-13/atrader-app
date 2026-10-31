@@ -27,6 +27,8 @@ import {
   FlatList,
   Image,
   Modal,
+  Keyboard,
+  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -34,13 +36,33 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import {
-  AndroidSoftInputModes,
-  KeyboardController,
-  useKeyboardHandler
-} from "react-native-keyboard-controller";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+const isKeyboardControllerLinked = Boolean(
+  NativeModules?.KeyboardController ||
+  (global as any)?.__turboModuleProxy?.('KeyboardController')
+);
+
+let KeyboardController: any = {
+  setInputMode: () => {},
+};
+let AndroidSoftInputModes: any = {
+  SOFT_INPUT_ADJUST_NOTHING: 0,
+  SOFT_INPUT_ADJUST_RESIZE: 0,
+};
+let useKeyboardHandler: any = (callbacks: any) => {};
+
+if (isKeyboardControllerLinked) {
+  try {
+    const kc = require("react-native-keyboard-controller");
+    KeyboardController = kc.KeyboardController;
+    AndroidSoftInputModes = kc.AndroidSoftInputModes;
+    useKeyboardHandler = kc.useKeyboardHandler;
+  } catch (e) {
+    // Fallback when native module is missing
+  }
+}
 
 const TradeChat = () => {
   const router = useRouter();
@@ -159,16 +181,38 @@ const TradeChat = () => {
 
   // Manual Keyboard Height Tracking
   const keyboardHeight = useSharedValue(0);
+
+  useEffect(() => {
+    if (!isKeyboardControllerLinked) {
+      const showSub = Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+        (e) => {
+          keyboardHeight.value = e.endCoordinates.height;
+        }
+      );
+      const hideSub = Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+        () => {
+          keyboardHeight.value = 0;
+        }
+      );
+      return () => {
+        showSub.remove();
+        hideSub.remove();
+      };
+    }
+  }, []);
+
   useKeyboardHandler({
-    onStart: (e) => {
+    onStart: (e: any) => {
       "worklet";
       keyboardHeight.value = e.height;
     },
-    onInteractive: (e) => {
+    onInteractive: (e: any) => {
       "worklet";
       keyboardHeight.value = e.height;
     },
-    onEnd: (e) => {
+    onEnd: (e: any) => {
       "worklet";
       keyboardHeight.value = e.height;
     },
