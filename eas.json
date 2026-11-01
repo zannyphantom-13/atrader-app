@@ -11,8 +11,7 @@
       "autoIncrement": true,
       "ios": {
         "simulator": false
-      },
-      "installCommand": "npm install"
+      }
     },
     "development-simulator": {
       "developmentClient": true,
@@ -35,8 +34,7 @@
       },
       "env": {
         "GOOGLE_SERVICES_JSON": "@GOOGLE_SERVICES_JSON"
-      },
-      "installCommand": "npm install"
+      }
     },
     "testflight": {
       "autoIncrement": true,
@@ -63,8 +61,7 @@
       },
       "env": {
         "GOOGLE_SERVICES_JSON": "@GOOGLE_SERVICES_JSON"
-      },
-      "installCommand": "npm install"
+      }
     }
   },
   "submit": {
