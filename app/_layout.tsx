@@ -15,8 +15,8 @@ import initZohoChat, {
 } from "@/lib/zoho-service";
 
 import store, { persistor, useAppSelector } from "@/redux/store";
-import { AppVersionUpdateModal } from "@/components/ui/AppVersionUpdateModal";
-import { UpdateBanner } from "@/components/ui/UpdateBanner";
+import { AppUpdateModal } from "@/components/modals/AppUpdateModal";
+
 // import SecureStoreAdapter from "@/utils/secure-store-adapter";
 import { initSentry } from "@/utils/sentry";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -153,8 +153,8 @@ function RootLayout() {
                           </BottomSheetModalProvider>
                           <InactivityModal />
                           <BackgroundLogoutModal />
-                          <AppVersionUpdateModal />
-                          <UpdateBanner />
+                          <AppUpdateModal />
+
                         </UpdatesProvider>
                       </NetworkProvider>
                     </ThemeProvider>

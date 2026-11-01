@@ -6,17 +6,13 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  // ActivityIndicator,
-  // Animated,
-  AppState,
-  AppStateStatus,
-  // StyleSheet,
-  // Text,
-  // View,
-} from "react-native";
+import { AppState, AppStateStatus } from "react-native";
 import * as Updates from "expo-updates";
 import SecureStoreAdapter from "@/utils/secure-store-adapter";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+
+export type UpdateType = "compulsory" | "optional";
 
 interface UpdatesContextType {
   isUpdateAvailable: boolean;
@@ -24,131 +20,170 @@ interface UpdatesContextType {
   isDownloading: boolean;
   isReloading: boolean;
   isDismissed: boolean;
+  updateType: UpdateType;
+  updateMessage: string;
   error: string | null;
   applyUpdate: () => Promise<void>;
   dismissUpdate: () => void;
   checkForUpdates: () => Promise<void>;
-  simulateUpdateForTesting: (ready?: boolean) => void;
+  simulateUpdateForTesting: (type?: UpdateType) => void;
 }
 
 /**
- * DEV_PREVIEW_BANNER:
- * Set to `true` to preview the banner + backdrop in development / simulator.
- * Automatically disabled in production builds.
+ * DEV_PREVIEW_UPDATE:
+ * Set to 'compulsory' or 'optional' to preview the modal in development.
+ * Set to null for normal live behavior.
  */
-export const DEV_PREVIEW_BANNER = false;
+export const DEV_PREVIEW_UPDATE: UpdateType | null = null;
 
 const UpdatesContext = createContext<UpdatesContextType | undefined>(undefined);
-
-/**
- * AutoUpdateOverlay (commented out):
- *
- * const AutoUpdateOverlay: React.FC<{ visible: boolean }> = ({ visible }) => {
- *   const fadeAnim = useRef(new Animated.Value(0)).current;
- *   useEffect(() => {
- *     if (visible) {
- *       Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
- *     }
- *   }, [visible, fadeAnim]);
- *   if (!visible) return null;
- *   return (
- *     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
- *       <View style={styles.overlayCard}>
- *         <ActivityIndicator size="large" color="#28a712" />
- *         <Text style={styles.overlayTitle}>Applying latest update…</Text>
- *         <Text style={styles.overlaySubtitle}>This will only take a moment</Text>
- *       </View>
- *     </Animated.View>
- *   );
- * };
- */
 
 export const UpdatesProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [isUpdateAvailable, setIsUpdateAvailable] = useState(DEV_PREVIEW_BANNER);
-  const [isUpdateReady, setIsUpdateReady] = useState(DEV_PREVIEW_BANNER);
+  const [isUpdateAvailable, setIsUpdateAvailable] = useState<boolean>(
+    Boolean(DEV_PREVIEW_UPDATE)
+  );
+  const [isUpdateReady, setIsUpdateReady] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [updateType, setUpdateType] = useState<UpdateType>(
+    DEV_PREVIEW_UPDATE || "optional"
+  );
+  const [updateMessage, setUpdateMessage] = useState<string>(
+    "A new version of Atrader is ready with the latest rates, features, and improvements."
+  );
   const [error, setError] = useState<string | null>(null);
-  // const [isAutoApplying, setIsAutoApplying] = useState(false);
 
-  // Synchronize on DEV_PREVIEW_BANNER toggle so Fast Refresh updates immediately
+  const isCheckingRef = useRef(false);
+  const isFetchingRef = useRef(false);
+
+  // Firestore remote force-update override listener
+  const firestoreForceUpdateRef = useRef<boolean>(false);
+
   useEffect(() => {
-    if (DEV_PREVIEW_BANNER) {
-      setIsUpdateAvailable(true);
-      setIsUpdateReady(true);
-      setIsDismissed(false);
+    if (!db) return;
+    try {
+      const unsub = onSnapshot(
+        doc(db, "system_config", "app_update"),
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data?.forceUpdate || data?.isCompulsory) {
+              firestoreForceUpdateRef.current = true;
+              setUpdateType("compulsory");
+              if (data?.message) {
+                setUpdateMessage(data.message);
+              }
+            } else if (data?.forceUpdate === false) {
+              firestoreForceUpdateRef.current = false;
+            }
+          }
+        },
+        (err) => {
+          console.log("[UpdatesProvider] Firestore listener notice:", err.message);
+        }
+      );
+      return () => unsub();
+    } catch {
+      // Ignore if Firestore not yet initialized
     }
   }, []);
 
-  const isCheckingRef = useRef(false);
-  const activeFetchPromiseRef = useRef<Promise<Updates.UpdateFetchResult> | null>(null);
-
+  // Check for OTA updates via expo-updates
   const checkForUpdates = useCallback(async () => {
     if (__DEV__ || !Updates.isEnabled) {
       return;
     }
 
-    if (isCheckingRef.current) return;
+    if (isCheckingRef.current || isFetchingRef.current) return;
     isCheckingRef.current = true;
 
     try {
       const check = await Updates.checkForUpdateAsync();
+
       if (check.isAvailable) {
-        setIsUpdateAvailable(true);
-        setIsDownloading(true);
+        const manifest: any = check.manifest;
 
-        // Fetch the update in background
-        const fetchPromise = Updates.fetchUpdateAsync();
-        activeFetchPromiseRef.current = fetchPromise;
+        // Extract update message & metadata from manifest
+        const rawMsg =
+          manifest?.metadata?.message ||
+          manifest?.extra?.message ||
+          manifest?.extra?.expoClient?.extra?.message ||
+          manifest?.extra?.expoClient?.description ||
+          manifest?.message ||
+          "";
 
-        const result = await fetchPromise;
-        activeFetchPromiseRef.current = null;
+        const lowerMsg = rawMsg.toLowerCase();
 
-        if (result.isNew) {
-          try {
-            await SecureStoreAdapter.setItem("is_safe_reload", "true");
-          } catch (e) {
-            console.warn("Could not set is_safe_reload:", e);
-          }
-          setIsUpdateReady(true);
-          setIsDownloading(false);
+        // Check if compulsory from update message or manifest flag or Firestore
+        const isCompulsory =
+          firestoreForceUpdateRef.current ||
+          manifest?.extra?.isCompulsory === true ||
+          manifest?.metadata?.isCompulsory === true ||
+          manifest?.extra?.forceUpdate === true ||
+          lowerMsg.includes("[force]") ||
+          lowerMsg.includes("[compulsory]") ||
+          lowerMsg.includes("[mandatory]") ||
+          lowerMsg.includes("compulsory");
 
-          // Show smooth overlay before auto-reloading (commented out):
-          // setIsAutoApplying(true);
+        const cleanMsg = rawMsg
+          .replace(/\[(force|compulsory|mandatory)\]/gi, "")
+          .trim();
 
-          // Brief pause so the user sees the "Applying latest update..." overlay
-          // await new Promise((resolve) => setTimeout(resolve, 1000));
-
-          // Auto-apply: reload seamlessly
-          // await Updates.reloadAsync();
+        setUpdateType(isCompulsory ? "compulsory" : "optional");
+        if (cleanMsg) {
+          setUpdateMessage(cleanMsg);
         }
-        setIsDownloading(false);
+
+        setIsUpdateAvailable(true);
+
+        // COMPULSORY UPDATE: Automatically download and reload without user confirmation
+        if (isCompulsory) {
+          console.log("[UpdatesProvider] Compulsory update detected. Auto-applying...");
+          setIsDownloading(true);
+          isFetchingRef.current = true;
+
+          const fetchResult = await Updates.fetchUpdateAsync();
+          isFetchingRef.current = false;
+
+          if (fetchResult.isNew) {
+            setIsUpdateReady(true);
+            setIsReloading(true);
+
+            // Set safe reload flag so auth & guards know it's a planned update
+            try {
+              await SecureStoreAdapter.setItem("is_safe_reload", "true");
+            } catch (e) {
+              console.warn("Could not set is_safe_reload:", e);
+            }
+
+            // Brief pause for visual smoothness before reload
+            await new Promise((r) => setTimeout(r, 800));
+            await Updates.reloadAsync();
+          }
+          setIsDownloading(false);
+        }
       } else {
         setIsUpdateAvailable(false);
       }
     } catch (err: any) {
+      console.warn("[UpdatesProvider] Update check error:", err?.message);
       setIsDownloading(false);
-      // setIsAutoApplying(false);
-      activeFetchPromiseRef.current = null;
-      setError(err?.message || "Error checking/fetching update");
+      isFetchingRef.current = false;
+      setError(err?.message || "Error checking for update");
     } finally {
       isCheckingRef.current = false;
     }
   }, []);
 
+  // Check on app mount
   useEffect(() => {
     checkForUpdates();
-    return () => {
-      if (isDownloading) {
-        console.log("Abort update download background task called");
-      }
-    };
-  }, []); // Captured isDownloading is stale on unmount!
+  }, [checkForUpdates]);
 
-  // Re-check when coming to foreground if not already ready
+  // Re-check when app returns to foreground
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === "active" && !isUpdateReady) {
@@ -160,66 +195,82 @@ export const UpdatesProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => sub.remove();
   }, [checkForUpdates, isUpdateReady]);
 
-  // Apply update immediately
+  // Apply update when user clicks "Update Now" (for Optional updates)
   const applyUpdate = useCallback(async () => {
     try {
-      setIsReloading(true);
+      setIsDownloading(true);
+      setError(null);
 
-      // If simulated or dev mode
+      // Dev preview mode
       if (__DEV__ || !Updates.isEnabled) {
+        setIsReloading(true);
         setTimeout(() => {
           setIsReloading(false);
-          setIsUpdateReady(false);
+          setIsDownloading(false);
           setIsUpdateAvailable(false);
           setIsDismissed(false);
         }, 1200);
         return;
       }
 
-      // If download is still running in background, wait for it
-      if (activeFetchPromiseRef.current) {
-        await activeFetchPromiseRef.current;
-      } else if (!isUpdateReady) {
+      // Download update bundle if not already ready
+      if (!isUpdateReady) {
+        isFetchingRef.current = true;
         await Updates.fetchUpdateAsync();
+        isFetchingRef.current = false;
+        setIsUpdateReady(true);
       }
 
-      // Set safe reload flag so guards don't treat it as crash/force-close
+      setIsReloading(true);
+
+      // Set safe reload flag
       try {
         await SecureStoreAdapter.setItem("is_safe_reload", "true");
       } catch (e) {
         console.warn("Could not set is_safe_reload:", e);
       }
+
+      await new Promise((r) => setTimeout(r, 400));
       await Updates.reloadAsync();
     } catch (err: any) {
-      console.error("Failed to apply update:", err);
+      console.error("[UpdatesProvider] Failed to apply update:", err);
+      setIsDownloading(false);
       setIsReloading(false);
+      isFetchingRef.current = false;
       setError(err?.message || "Failed to apply update");
     }
   }, [isUpdateReady]);
 
-  // Dismiss banner for current session
+  // Dismiss optional update for this session
   const dismissUpdate = useCallback(() => {
-    setIsDismissed(true);
-  }, []);
+    if (updateType !== "compulsory") {
+      setIsDismissed(true);
+    }
+  }, [updateType]);
 
-  // Simulation function for manual testing in development
-  const simulateUpdateForTesting = useCallback((ready: boolean = true) => {
-    setIsUpdateAvailable(true);
-    setIsUpdateReady(ready);
-    setIsDismissed(false);
-  }, []);
-
-  const effectiveIsUpdateAvailable = DEV_PREVIEW_BANNER || isUpdateAvailable;
-  const effectiveIsUpdateReady = DEV_PREVIEW_BANNER || isUpdateReady;
+  // Development simulation helper
+  const simulateUpdateForTesting = useCallback(
+    (type: UpdateType = "optional") => {
+      setUpdateType(type);
+      setIsUpdateAvailable(true);
+      setIsDismissed(false);
+      if (type === "compulsory") {
+        setUpdateMessage("A critical update is required to continue using Atrader.");
+      }
+    },
+    []
+  );
 
   return (
     <UpdatesContext.Provider
       value={{
-        isUpdateAvailable: effectiveIsUpdateAvailable,
-        isUpdateReady: effectiveIsUpdateReady,
+        isUpdateAvailable,
+        isUpdateReady,
         isDownloading,
         isReloading,
         isDismissed,
+        updateType,
+        updateMessage,
         error,
         applyUpdate,
         dismissUpdate,
@@ -228,7 +279,6 @@ export const UpdatesProvider: React.FC<{ children: React.ReactNode }> = ({
       }}
     >
       {children}
-      {/* <AutoUpdateOverlay visible={isAutoApplying} /> */}
     </UpdatesContext.Provider>
   );
 };
@@ -239,51 +289,16 @@ const defaultUpdatesContext: UpdatesContextType = {
   isDownloading: false,
   isReloading: false,
   isDismissed: false,
+  updateType: "optional",
+  updateMessage: "",
   error: null,
-  applyUpdate: async () => { },
-  dismissUpdate: () => { },
-  checkForUpdates: async () => { },
-  simulateUpdateForTesting: () => { },
+  applyUpdate: async () => {},
+  dismissUpdate: () => {},
+  checkForUpdates: async () => {},
+  simulateUpdateForTesting: () => {},
 };
 
 export const useUpdatesContext = () => {
   const context = useContext(UpdatesContext);
   return context || defaultUpdatesContext;
 };
-
-/*
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 9999,
-  },
-  overlayCard: {
-    backgroundColor: "#1A1A1A",
-    borderRadius: 20,
-    paddingVertical: 32,
-    paddingHorizontal: 40,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    elevation: 20,
-  },
-  overlayTitle: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "600",
-    marginTop: 16,
-    letterSpacing: -0.2,
-  },
-  overlaySubtitle: {
-    color: "#999999",
-    fontSize: 13,
-    fontWeight: "400",
-    marginTop: 6,
-  },
-});
-*/

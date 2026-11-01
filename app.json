@@ -142,6 +142,11 @@
     "experiments": {
       "typedRoutes": true
     },
+    "updates": {
+      "url": "https://u.expo.dev/58fcebb1-ff94-4120-8381-32984a5e83fc",
+      "enabled": true,
+      "checkAutomatically": "NEVER"
+    },
     "extra": {
       "router": {},
       "eas": {
