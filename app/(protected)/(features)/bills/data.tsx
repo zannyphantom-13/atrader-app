@@ -29,6 +29,7 @@ import { getFirstChar, getIconsForBeneficiary } from "@/utils/bills";
 import { app_config } from "@/utils/config";
 import { paths } from "@/utils/paths";
 import { TokenManager } from "@/utils/secure-store-adapter";
+import { CowrieService } from "@/services/cowrie-service";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -182,7 +183,15 @@ const Data = () => {
     checkNetworkStatus();
   }, []);
 
+  const [isCowrieLoading, setIsCowrieLoading] = React.useState(false);
+
   const getPlanTypeData = async (network: string) => {
+    // Load Cowrie VAS bundles for current network & active plan duration (Daily, Weekly, Monthly)
+    const cowrieBundles = CowrieService.getDataPlans(network, activePlanType);
+    if (cowrieBundles && cowrieBundles.length > 0) {
+      setPlanTypeData(cowrieBundles);
+    }
+
     const atex = await TokenManager.getToken();
     if (atex) {
       try {
@@ -194,31 +203,53 @@ const Data = () => {
           },
         }).unwrap();
 
-        if (response.status === "success") {
+        if (response.status === "success" && response.data_plans && response.data_plans.length > 0) {
           setPlanTypeData(response.data_plans);
           console.log("Plan Type Data:", response);
-        } else {
-          console.error("Failed to fetch plan type data:", response);
+        } else if (!cowrieBundles || cowrieBundles.length === 0) {
           setPlanTypeData(null);
         }
       } catch (error: any) {
-        // toast.showToast(`${error?.data?.message}`, "error");
-        setPlanTypeData(null);
-        console.error("Error fetching plan type data:", error);
+        if (!cowrieBundles || cowrieBundles.length === 0) {
+          setPlanTypeData(null);
+        }
+        console.error("Error fetching plan type data from backend:", error);
       }
     }
   };
 
   React.useEffect(() => {
-    // if (formData.network) {
     getPlanTypeData(formData.network);
-    // }
   }, [formData.network, activePlanType]);
 
   const PurchaseData = async () => {
-    const atex = await TokenManager.getToken();
-    if (atex) {
-      try {
+    setIsCowrieLoading(true);
+    try {
+      // 1. Try Cowrie VAS Data Integration (https://github.com/cowriesys/airtime)
+      console.log("[Data] Purchasing data via Cowrie VAS API...");
+      const selectedPlan = planTypeData?.find((p: any) => p.plan_id === formData.planId);
+      const bundleCode = selectedPlan?.bundleCode || formData.planId;
+
+      const cowrieRes = await CowrieService.vendData({
+        network: formData.network,
+        phone: formData.number,
+        amount: formData.amount,
+        bundle: bundleCode,
+      });
+
+      if (cowrieRes.success) {
+        console.log("Cowrie Data Purchase Successful:", cowrieRes);
+        setShowDataModal(false);
+        setPin("");
+        setTransactionId(cowrieRes.transid || cowrieRes.reference || "");
+        toast.showToast(cowrieRes.message || "Data Purchase Successful", "success");
+        setShowSuccessModal(true);
+        return;
+      }
+
+      // 2. Fallback to existing backend API if Cowrie failed
+      const atex = await TokenManager.getToken();
+      if (atex) {
         const response: any = await buyData({
           data: {
             token: atex,
@@ -228,34 +259,30 @@ const Data = () => {
           },
         }).unwrap();
         if (response.status === "success") {
-          console.log("Airtime Purchase Successful:", response);
+          console.log("Data Purchase Successful:", response);
           setShowDataModal(false);
           setPin("");
           setTransactionId(response?.data?.transid || response?.transid);
           toast.showToast("Data Purchase Successful", "success");
           setShowSuccessModal(true);
-          // router.push({
-          //   pathname: paths.bills.billReceipt,
-          //   params: {
-          //     transId: response?.data?.transid || response?.transid,
-          //     type: "data",
-          //   },
-          // });
         } else {
           setPin("");
-          console.error("Airtime Purchase Failed:", response);
+          console.error("Data Purchase Failed:", response);
           toast.showToast(
-            response.message || "Airtime Purchase Failed",
+            response.message || cowrieRes.message || "Data Purchase Failed",
             "error",
           );
         }
-      } catch (error: any) {
-        console.error("Error purchasing airtime:", error);
-        toast.showToast(`${error?.data?.message}`, "error");
+      } else {
         setPin("");
+        toast.showToast(cowrieRes.message || "Data Purchase Failed", "error");
       }
-    } else {
-      router.replace(paths.auth.login);
+    } catch (error: any) {
+      console.error("Error purchasing data:", error);
+      toast.showToast(`${error?.data?.message || error?.message || "Data purchase failed"}`, "error");
+      setPin("");
+    } finally {
+      setIsCowrieLoading(false);
     }
   };
 
@@ -755,7 +782,7 @@ const Data = () => {
       )}
 
       <Modal
-        visible={isBuyingData}
+        visible={isBuyingData || isCowrieLoading}
         transparent={true}
         animationType="fade"
         statusBarTranslucent={true}

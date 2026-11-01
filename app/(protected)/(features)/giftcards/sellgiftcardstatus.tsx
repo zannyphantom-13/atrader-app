@@ -55,7 +55,7 @@ const SellGiftCardsStatus = () => {
   const handleSupportPress = (transId: string, type: string) => {
     const category = data?.giftcard?.category;
     // Navigate to Firebase trade chat
-    router.push({ pathname: '/(protected)/(features)/trade-chat' as any, params: { tradeId: transId, cardName: category || 'Gift Card', cardCategory: category || '', type: 'new' } });
+    router.push({ pathname: '/(protected)/(features)/trade-chat' as any, params: { tradeId: transId, cardName: category || 'Gift Card', cardCategory: category || '', type: 'existing' } });
   }
 
   return (

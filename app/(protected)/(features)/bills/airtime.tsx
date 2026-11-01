@@ -27,6 +27,7 @@ import { getFirstChar, getIconsForBeneficiary } from "@/utils/bills";
 import { app_config } from "@/utils/config";
 import { paths } from "@/utils/paths";
 import { TokenManager } from "@/utils/secure-store-adapter";
+import { CowrieService } from "@/services/cowrie-service";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -164,10 +165,32 @@ const Airtime = () => {
     checkNetworkStatus();
   }, []);
 
+  const [isCowrieLoading, setIsCowrieLoading] = React.useState(false);
+
   const PurchaseAirtime = async () => {
-    const atex = await TokenManager.getToken();
-    if (atex) {
-      try {
+    setIsCowrieLoading(true);
+    try {
+      // 1. Try Cowrie VAS Airtime Integration (https://github.com/cowriesys/airtime)
+      console.log("[Airtime] Purchasing via Cowrie VAS API...");
+      const cowrieRes = await CowrieService.vendAirtime({
+        network: formData.network,
+        phone: formData.number,
+        amount: formData.amount,
+      });
+
+      if (cowrieRes.success) {
+        console.log("Cowrie Airtime Purchase Successful:", cowrieRes);
+        setShowAirtimeModal(false);
+        setPin("");
+        setTransactionId(cowrieRes.transid || cowrieRes.reference || "");
+        toast.showToast(cowrieRes.message || "Airtime Purchase Successful", "success");
+        setShowSuccessModal(true);
+        return;
+      }
+
+      // 2. Fallback to existing backend API if Cowrie failed
+      const atex = await TokenManager.getToken();
+      if (atex) {
         const response: any = await buyAirtime({
           data: {
             token: atex,
@@ -189,17 +212,20 @@ const Airtime = () => {
           setPin("");
           console.error("Airtime Purchase Failed:", response);
           toast.showToast(
-            response.message || "Airtime Purchase Failed",
+            response.message || cowrieRes.message || "Airtime Purchase Failed",
             "error",
           );
         }
-      } catch (error: any) {
-        console.error("Error purchasing airtime:", error);
-        toast.showToast(`${error?.data?.message}`, "error");
+      } else {
         setPin("");
+        toast.showToast(cowrieRes.message || "Airtime Purchase Failed", "error");
       }
-    } else {
-      router.replace(paths.auth.login);
+    } catch (error: any) {
+      console.error("Error purchasing airtime:", error);
+      toast.showToast(`${error?.data?.message || error?.message || "Airtime purchase failed"}`, "error");
+      setPin("");
+    } finally {
+      setIsCowrieLoading(false);
     }
   };
 
@@ -378,7 +404,7 @@ const Airtime = () => {
                 </View>
 
                 <TextInput
-                  placeholder="Enter phone number"
+                  placeholder="Enter beneficiary phone number"
                   placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                   value={formData.number}
                   onChangeText={handleChangePhoneNumber}
@@ -682,7 +708,7 @@ const Airtime = () => {
       )}
 
       <Modal
-        visible={isBuyingAirtime}
+        visible={isBuyingAirtime || isCowrieLoading}
         transparent={true}
         animationType="fade"
         statusBarTranslucent={true}

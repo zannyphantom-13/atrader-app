@@ -42,6 +42,9 @@ export interface ChatDocument {
   settlementAmount: string;
   tradeStatus: TradeStatus | null;
   chatStatus: ChatStatus;
+  status?: string | null;
+  rejectReason?: string | null;
+  closedBy?: string | null;
   assignedAgent: string | null;
   assignedAgentName: string | null;
   assignedRole: string | null;
@@ -154,7 +157,7 @@ export const createTradeChat = async (
     updatedAt: serverTimestamp(),
   };
 
-  await setDoc(chatRef, chatData);
+  await setDoc(chatRef, chatData, { merge: true });
   console.log("[FirebaseChat] Chat created:", chatId);
 
   // Add initial system message
@@ -420,6 +423,7 @@ export const closeChat = async (chatId: string): Promise<void> => {
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   await updateDoc(chatRef, {
     chatStatus: "closed",
+    status: "closed",
     updatedAt: serverTimestamp(),
   });
 
@@ -445,6 +449,8 @@ export const reopenChat = async (chatId: string): Promise<void> => {
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   await updateDoc(chatRef, {
     chatStatus: "open",
+    status: "active",
+    tradeStatus: "pending",
     updatedAt: serverTimestamp(),
   });
 

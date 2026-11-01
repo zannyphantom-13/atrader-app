@@ -86,14 +86,19 @@ const TradeChat = () => {
     isSupport?: string;
   }>();
 
-  const [chatId, setChatId] = useState<string | null>(
-    params.chatId || (params.type === "existing" ? `trade_${params.tradeId}` : null)
-  );
+  const resolvedChatId =
+    params.chatId ||
+    (params.tradeId
+      ? params.tradeId.startsWith("trade_") || params.tradeId.startsWith("support_")
+        ? params.tradeId
+        : `trade_${params.tradeId}`
+      : null);
+
+  const [chatId, setChatId] = useState<string | null>(resolvedChatId);
   const [inputText, setInputText] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [showEndChatModal, setShowEndChatModal] = useState(false);
   const [isEndingChat, setIsEndingChat] = useState(false);
-  const [isReopeningChat, setIsReopeningChat] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [visibleImageIndex, setVisibleImageIndex] = useState(0);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -130,7 +135,7 @@ const TradeChat = () => {
     fetchDetailedTransaction();
   }, [params.tradeId, params.chatId, params.isSupport]);
 
-  const { messages, chatInfo, isLoading, isSending, isUploading, sendText, sendImage, endChat, reopenChat } =
+  const { messages, chatInfo, isLoading, isSending, isUploading, sendText, sendImage, endChat } =
     useFirebaseChat(chatId, userId, userName, userAvatar || "");
 
   // Create chat on mount if it's a new trade
@@ -223,11 +228,98 @@ const TradeChat = () => {
     paddingBottom: Math.max(0, Math.abs(keyboardHeight.get()) - (Platform.OS === "android" ? insets.bottom - 10 : insets.bottom - 10)),
   }));
 
+  const isSupportChat = chatId?.startsWith("support_");
+  const agentDisplayName = chatInfo?.assignedAgentName || "Atrader customer support";
+
+  // Normalize trade and chat status from real-time Firestore chatInfo and backend REST tradeData
+  const rawTradeStatus = (
+    chatInfo?.tradeStatus ||
+    (chatInfo as any)?.status ||
+    (tradeData?.plan_status === 1 ? "approved" : tradeData?.plan_status === 2 ? "rejected" : null) ||
+    "pending"
+  ).toLowerCase();
+
+  // Check system messages for approval or rejection in case document state lagged
+  const hasApprovedMessage = messages?.some(
+    (m) =>
+      m.senderType === "system" &&
+      (m.text?.toLowerCase().includes("trade has been approved") ||
+        m.text?.toLowerCase().includes("funds would be sent soon"))
+  );
+
+  const hasRejectedMessage = messages?.some(
+    (m) =>
+      m.senderType === "system" &&
+      m.text?.toLowerCase().includes("trade has been rejected")
+  );
+
+  const messageRejectReason = messages
+    ?.filter((m) => m.senderType === "system" && m.text?.toLowerCase().includes("reason:"))
+    ?.slice(-1)[0]
+    ?.text?.split(/reason:\s*/i)[1]
+    ?.trim();
+
+  const isTradeApproved =
+    rawTradeStatus === "approved" ||
+    rawTradeStatus === "successful" ||
+    rawTradeStatus === "success" ||
+    tradeData?.plan_status === 1 ||
+    Boolean(hasApprovedMessage && !hasRejectedMessage);
+
+  const isTradeRejected =
+    !isTradeApproved &&
+    (rawTradeStatus === "rejected" ||
+      rawTradeStatus === "reject" ||
+      rawTradeStatus === "failed" ||
+      tradeData?.plan_status === 2 ||
+      Boolean(hasRejectedMessage));
+
+  const isTradePending = !isTradeApproved && !isTradeRejected;
+
+  const displayStatusText = isTradeApproved
+    ? "Approved"
+    : isTradeRejected
+    ? "Rejected"
+    : "Pending";
+
+  const statusColor = isTradeApproved
+    ? "#22C55E"
+    : isTradeRejected
+    ? "#EF4444"
+    : "#F59E0B";
+
+  const statusBgColor = isTradeApproved
+    ? (isDark ? "rgba(34, 197, 94, 0.18)" : "#E8FFE4")
+    : isTradeRejected
+    ? (isDark ? "rgba(239, 68, 68, 0.18)" : "#FDF0F0")
+    : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
+
+  const statusBorderColor = isTradeApproved
+    ? (isDark ? "rgba(34, 197, 94, 0.35)" : "#B8E1AF")
+    : isTradeRejected
+    ? (isDark ? "rgba(239, 68, 68, 0.35)" : "#FFC0C0")
+    : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
+
+  // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved
+  const isChatClosed =
+    chatInfo?.chatStatus === "closed" ||
+    (chatInfo as any)?.status === "closed" ||
+    (chatInfo as any)?.status === "reject" ||
+    isTradeApproved ||
+    isTradeRejected;
+
+  const rejectionReason =
+    chatInfo?.rejectReason ||
+    (chatInfo as any)?.reject_reason ||
+    tradeData?.reject_reason ||
+    messageRejectReason ||
+    "";
+
   // Scroll to bottom when new messages arrive - REMOVED for inverted list
   // Inverted lists are anchored to the bottom by default.
 
   const handleSend = useCallback(async () => {
-    if (!inputText.trim() || chatInfo?.chatStatus === "closed") return;
+    if (!inputText.trim() || isChatClosed) return;
     const text = inputText;
     setInputText("");
     try {
@@ -236,10 +328,10 @@ const TradeChat = () => {
       setInputText(text); // restore on error
       Alert.alert("Error", "Failed to send message. Please try again.");
     }
-  }, [inputText, sendText, chatInfo?.chatStatus]);
+  }, [inputText, sendText, isChatClosed]);
 
   const handlePickImage = useCallback(async () => {
-    if (chatInfo?.chatStatus === "closed") return;
+    if (isChatClosed) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -258,7 +350,7 @@ const TradeChat = () => {
         Alert.alert("Error", "Failed to send one or more images. Please try again.");
       }
     }
-  }, [sendImage, chatInfo?.chatStatus]);
+  }, [sendImage, isChatClosed]);
 
   const handleEndChat = useCallback(async () => {
     setShowEndChatModal(true);
@@ -276,16 +368,7 @@ const TradeChat = () => {
     }
   }, [endChat]);
 
-  const handleReopenChat = useCallback(async () => {
-    setIsReopeningChat(true);
-    try {
-      await reopenChat();
-    } catch (error) {
-      Alert.alert("Error", "Failed to reopen chat. Please try again.");
-    } finally {
-      setIsReopeningChat(false);
-    }
-  }, [reopenChat]);
+
 
   const handleContactSupport = useCallback(async () => {
     try {
@@ -303,33 +386,6 @@ const TradeChat = () => {
       return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     } catch {
       return "";
-    }
-  };
-
-  const isChatClosed = chatInfo?.chatStatus === "closed";
-  const tradeStatus = chatInfo?.tradeStatus || "pending";
-  const isSupportChat = chatId?.startsWith("support_");
-  const agentDisplayName = chatInfo?.assignedAgentName || "Atrader customer support";
-
-  const getStatusColor = () => {
-    switch (tradeStatus) {
-      case "successful":
-        return "#22C55E";
-      case "rejected":
-        return "#EF4444";
-      default:
-        return "#F59E0B";
-    }
-  };
-
-  const getStatusBgColor = () => {
-    switch (tradeStatus) {
-      case "successful":
-        return isDark ? "#0A2E0A" : "#F0FDF4";
-      case "rejected":
-        return isDark ? "#2E0A0A" : "#FDF0F0";
-      default:
-        return isDark ? "#2E2A0A" : "#FFFBEB";
     }
   };
 
@@ -586,15 +642,19 @@ const TradeChat = () => {
                 <View className="flex-row items-center">
                   <View
                     className="px-3 py-1.5 rounded-full mr-2"
-                    style={{ backgroundColor: getStatusBgColor() }}
+                    style={{
+                      backgroundColor: statusBgColor,
+                      borderWidth: 1,
+                      borderColor: statusBorderColor,
+                    }}
                   >
                     <ThemedText
                       family="primary"
                       weight="bold"
                       className="text-[12px] capitalize"
-                      style={{ color: getStatusColor() }}
+                      style={{ color: statusColor }}
                     >
-                      {tradeStatus}
+                      {displayStatusText}
                     </ThemedText>
                   </View>
                   <ChevronDown size={18} color={isDark ? "#9CA3AF" : "#6B7280"} />
@@ -641,38 +701,50 @@ const TradeChat = () => {
           )}
 
           {/* Trade Status Bar (appears when trade is resolved) - HIDE FOR SUPPORT CHATS */}
-          {!isSupportChat && (tradeStatus === "successful" || tradeStatus === "rejected") && (
+          {!isSupportChat && (isTradeApproved || isTradeRejected) && (
             <View
-              className="flex-row items-center justify-between px-5 py-3 mx-5 mb-2 rounded-[16px]"
+              className="px-5 py-3 mx-5 mb-2 rounded-[16px]"
               style={{
                 backgroundColor: isDark ? "#111111" : "#FAFAFA",
                 borderWidth: 1,
                 borderColor: isDark ? "#232323" : "#EFEFEF",
               }}
             >
-              <View className="flex-row items-center">
-                {tradeStatus === "successful" ? (
-                  <CheckCircle2 size={24} color="#22C55E" fill="#22C55E" />
-                ) : (
-                  <XCircle size={24} color="#EF4444" fill="#EF4444" />
-                )}
-                <ThemedText family="primary" weight="bold" className="text-b2 ml-2">
-                  {tradeStatus === "successful" ? "Trade successful" : "Trade rejected"}
-                </ThemedText>
-              </View>
-              {!isChatClosed && (
-                <Pressable
-                  onPress={handleEndChat}
-                  className="px-4 py-2 rounded-[12px] border"
-                  style={{
-                    borderColor: isDark ? "#333" : "#DDD",
-                    backgroundColor: isDark ? "#1A1A1A" : "#FFF",
-                  }}
-                >
-                  <ThemedText family="primary" weight="medium" className="text-b3">
-                    End chat
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center flex-1 mr-2">
+                  {isTradeApproved ? (
+                    <CheckCircle2 size={24} color="#22C55E" fill="#22C55E" />
+                  ) : (
+                    <XCircle size={24} color="#EF4444" fill="#EF4444" />
+                  )}
+                  <ThemedText family="primary" weight="bold" className="text-b2 ml-2">
+                    {isTradeApproved ? "Trade approved" : "Trade rejected"}
                   </ThemedText>
-                </Pressable>
+                </View>
+                {!isChatClosed && (
+                  <Pressable
+                    onPress={handleEndChat}
+                    className="px-4 py-2 rounded-[12px] border"
+                    style={{
+                      borderColor: isDark ? "#333" : "#DDD",
+                      backgroundColor: isDark ? "#1A1A1A" : "#FFF",
+                    }}
+                  >
+                    <ThemedText family="primary" weight="medium" className="text-b3">
+                      End chat
+                    </ThemedText>
+                  </Pressable>
+                )}
+              </View>
+              {isTradeRejected && !!rejectionReason && (
+                <View className="mt-2.5 pt-2 border-t border-gray-100 dark:border-[#202020]">
+                  <ThemedText family="secondary" variant="secondary" className="text-[12px]">
+                    Reason:{" "}
+                    <ThemedText family="primary" weight="medium" className="text-[12px] !text-red-500">
+                      {rejectionReason}
+                    </ThemedText>
+                  </ThemedText>
+                </View>
               )}
             </View>
           )}
@@ -882,6 +954,8 @@ const TradeChat = () => {
           data={tradeData}
           images={tradeImages}
           isLoading={isFetchingTrade}
+          rejectReason={rejectionReason}
+          statusText={displayStatusText}
         />
 
       </ThemedView>

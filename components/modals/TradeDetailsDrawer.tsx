@@ -1,9 +1,7 @@
 import { ThemedText } from "@/components/theme/themeText";
 import { useTheme } from "@/context/ThemeProvider";
 import { useToast } from "@/context/ToastProvider";
-import { useGetAllTypeDetailTransactionMutation } from "@/redux/transaction/transaction_history";
 import { formatNumber } from "@/utils/formatamount";
-import { TokenManager } from "@/utils/secure-store-adapter";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -19,6 +17,8 @@ interface TradeDetailsDrawerProps {
   data: any;
   images: any[];
   isLoading: boolean;
+  rejectReason?: string;
+  statusText?: string;
 }
 
 const InfoRow = ({ label, value, secondaryValue, isCopyable, isImage, isDark, onCopy, fullWidthValue }: any) => {
@@ -51,7 +51,7 @@ const InfoRow = ({ label, value, secondaryValue, isCopyable, isImage, isDark, on
   );
 };
 
-export const TradeDetailsDrawer = ({ bottomSheetRef, data, images, isLoading }: TradeDetailsDrawerProps) => {
+export const TradeDetailsDrawer = ({ bottomSheetRef, data, images, isLoading, rejectReason, statusText }: TradeDetailsDrawerProps) => {
   const { isDark } = useTheme();
   const toast = useToast();
 
@@ -72,6 +72,9 @@ export const TradeDetailsDrawer = ({ bottomSheetRef, data, images, isLoading }: 
     (props: any) => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} />,
     []
   );
+
+  const displayRejectReason = rejectReason || data?.reject_reason;
+  const displayStatus = statusText || (data?.plan_status === 1 ? "Approved" : data?.plan_status === 2 ? "Rejected" : "Pending");
 
   return (
     <>
@@ -102,6 +105,7 @@ export const TradeDetailsDrawer = ({ bottomSheetRef, data, images, isLoading }: 
           </View>
         ) : (
           <View>
+            <InfoRow label="Status" value={displayStatus} isDark={isDark} />
             <InfoRow label="Date" value={data?.plan_date || data?.date} isDark={isDark} />
             <InfoRow label="Transaction ID" value={data?.transid} isCopyable isDark={isDark} onCopy={copyToClipboard} />
             <InfoRow label="Category" value={data?.image} secondaryValue={data?.category} isImage isDark={isDark} />
@@ -113,8 +117,8 @@ export const TradeDetailsDrawer = ({ bottomSheetRef, data, images, isLoading }: 
             {(data?.comment_ecode || data?.comment) && (
               <InfoRow label="Comment" value={data?.comment_ecode || data?.comment} fullWidthValue isDark={isDark} />
             )}
-            {data?.reject_reason && (
-              <InfoRow label="Reject Reason" value={data?.reject_reason} fullWidthValue isDark={isDark} />
+            {displayRejectReason && (
+              <InfoRow label="Reject Reason" value={displayRejectReason} fullWidthValue isDark={isDark} />
             )}
 
             {images?.length > 0 && (

@@ -7,7 +7,6 @@ import {
   sendImageMessage,
   markChatReadByUser,
   closeChat,
-  reopenChat,
   type MessageDocument,
   type ChatDocument,
 } from '@/lib/firebase-chat-service';
@@ -21,7 +20,6 @@ interface UseFirebaseChatReturn {
   sendText: (text: string) => Promise<void>;
   sendImage: (imageUri: string, fileName?: string) => Promise<void>;
   endChat: () => Promise<void>;
-  reopenChat: () => Promise<void>;
 }
 
 export const useFirebaseChat = (
@@ -66,7 +64,7 @@ export const useFirebaseChat = (
       unsubscribe();
       hasMarkedRead.current = false;
     };
-  }, [chatId]);
+  }, [chatId, isAuthReady]);
 
   // Subscribe to chat document for real-time status updates
   useEffect(() => {
@@ -77,14 +75,14 @@ export const useFirebaseChat = (
     });
 
     return () => unsubscribe();
-  }, [chatId]);
+  }, [chatId, isAuthReady]);
 
   // Mark as read when user opens chat
   useEffect(() => {
     if (chatId && isAuthReady) {
       markChatReadByUser(chatId);
     }
-  }, [chatId]);
+  }, [chatId, isAuthReady]);
 
   const sendText = useCallback(async (text: string) => {
     if (!chatId || !text.trim()) return;
@@ -122,16 +120,6 @@ export const useFirebaseChat = (
     }
   }, [chatId]);
 
-  const handleReopenChat = useCallback(async () => {
-    if (!chatId) return;
-    try {
-      await reopenChat(chatId);
-    } catch (error) {
-      console.error('[useFirebaseChat] Failed to reopen chat:', error);
-      throw error;
-    }
-  }, [chatId]);
-
   return {
     messages,
     chatInfo,
@@ -141,6 +129,5 @@ export const useFirebaseChat = (
     sendText,
     sendImage,
     endChat,
-    reopenChat: handleReopenChat,
   };
 };

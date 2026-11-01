@@ -64,7 +64,7 @@ const TabsLayout = () => {
       <Tabs.Screen
         name={"index"}
         options={{
-          title: "lome",
+          title: "Home",
           headerShown: true,
           headerTitle: "", // Alternative to title
           headerTitleAlign: "center", // "left" | "center"

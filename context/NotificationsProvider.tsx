@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import React, {
   createContext,
   ReactNode,
@@ -68,6 +68,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const { notificationEnabledStatus } = useAppSelector(
     (state) => state.session,
   );
+  const router = useRouter();
 
 
 
