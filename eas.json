@@ -33,7 +33,8 @@
         "simulator": false
       },
       "env": {
-        "GOOGLE_SERVICES_JSON": "@GOOGLE_SERVICES_JSON"
+        "GOOGLE_SERVICES_JSON": "@GOOGLE_SERVICES_JSON",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "testflight": {
