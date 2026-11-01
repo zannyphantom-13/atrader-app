@@ -145,15 +145,10 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "da9656cf-6cdb-43fa-b71c-b463bbf0e9d8"
+        "projectId": "58fcebb1-ff94-4120-8381-32984a5e83fc"
       }
     },
-    "owner": "atrader",
-    "runtimeVersion": "1.0.0",
-    "updates": {
-      "url": "https://u.expo.dev/da96456cf-6cdb-43fa-b71c-b463b7bf0e9d8",
-      "fallbackToCacheTimeout": 0,
-      "enabled": true
-    }
+    "owner": "zanthedeveloper",
+    "runtimeVersion": "1.0.0"
   }
 }

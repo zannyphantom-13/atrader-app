@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native builds
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# OS
+.DS_Store
+*.pem
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+app-example
+
+# Admin keys (keep private)
+*-firebase-adminsdk-*.json
+android-service-account.json
+
+# Keep .env and google-services.json available for EAS build:
+!.env
+!google-services.json
