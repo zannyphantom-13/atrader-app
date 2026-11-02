@@ -278,27 +278,27 @@ const TradeChat = () => {
   const isTradePending = !isTradeApproved && !isTradeRejected;
 
   const displayStatusText = isTradeApproved
-    ? "Approved"
+    ? "Successful"
     : isTradeRejected
     ? "Rejected"
     : "Pending";
 
   const statusColor = isTradeApproved
-    ? "#22C55E"
+    ? (isDark ? "#37C415" : "#28A712")
     : isTradeRejected
-    ? "#EF4444"
+    ? (isDark ? "#EF4444" : "#E53935")
     : "#F59E0B";
 
   const statusBgColor = isTradeApproved
-    ? (isDark ? "rgba(34, 197, 94, 0.18)" : "#E8FFE4")
+    ? (isDark ? "#0B2E02" : "#E8FFE4")
     : isTradeRejected
-    ? (isDark ? "rgba(239, 68, 68, 0.18)" : "#FDF0F0")
+    ? (isDark ? "#300808" : "#FFE8E8")
     : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
 
   const statusBorderColor = isTradeApproved
-    ? (isDark ? "rgba(34, 197, 94, 0.35)" : "#B8E1AF")
+    ? (isDark ? "#37C415" : "#28A712")
     : isTradeRejected
-    ? (isDark ? "rgba(239, 68, 68, 0.35)" : "#FFC0C0")
+    ? (isDark ? "#EF4444" : "#E53935")
     : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
 
   // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved
@@ -414,133 +414,255 @@ const TradeChat = () => {
     const isSystem = item.senderType === "system";
     const isUser = item.senderType === "user";
 
-    if (isSystem) {
+    if (isSystem || !isUser) {
+      // Support / Agent Message (aligned to LEFT)
       return (
-        <View className="mb-4">
-          {/* System sender label */}
-          <View className="flex-row items-center mb-1.5">
-            <View className="w-6 h-6 mr-2 rounded-full overflow-hidden bg-white dark:bg-[#111111] border border-[#E5E7EB] dark:border-[#333333] items-center justify-center">
+        <View style={{ marginBottom: 16, alignItems: "flex-start", marginHorizontal: 20 }}>
+          {/* Header with avatar + name */}
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                overflow: "hidden",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: 8,
+                borderWidth: 0.5,
+                borderColor: isDark ? "#333333" : "#E6E6E6",
+                backgroundColor: isDark ? "#111111" : "#FFFFFF",
+              }}
+            >
               <Image
                 source={isDark ? img.logoDarkPng : img.logolightPng}
-                style={{ width: 20, height: 20 }}
+                style={{ width: 16, height: 16 }}
                 resizeMode="contain"
               />
             </View>
-            <ThemedText family="primary" weight="medium" className="text-b3">
-              {/* {agentDisplayName} */}
-              Atrader customer support
+            <ThemedText
+              family="primary"
+              weight="medium"
+              style={{
+                fontSize: 12,
+                lineHeight: 15.6,
+                color: isDark ? "#FFFFFF" : "#4A4A4A",
+              }}
+            >
+              ATrader customer support
             </ThemedText>
           </View>
-          {/* System message bubble */}
-          <View
-            className="ml-8 p-3 rounded-[16px] max-w-[85%]"
-            style={{ backgroundColor: isDark ? "#111111" : "#F5F5F5" }}
-          >
-            <ThemedText family="primary" weight="regular" className="text-b2 leading-5">
-              {item.text}
-            </ThemedText>
-            <ThemedText family="secondary" variant="secondary" className="text-[11px] mt-1.5">
-              {formatTime(item.createdAt)}
-            </ThemedText>
-          </View>
-        </View>
-      );
-    }
 
-    if (isUser) {
-      return (
-        <View className="mb-4 items-end">
-          {/* User message bubble */}
+          {/* Bubble */}
           {item.type === "image" && item.imageUrl ? (
-            <Pressable className="max-w-[75%]" onPress={() => handleImagePress(item.id!)}>
+            <Pressable
+              onPress={() => handleImagePress(item.id!)}
+              style={{
+                width: 295,
+                height: 190,
+                borderRadius: 12,
+                borderTopLeftRadius: 0,
+                overflow: "hidden",
+              }}
+            >
               <Image
                 source={{ uri: item.imageUrl }}
-                style={{ width: 220, height: 160, borderRadius: 16 }}
+                style={{ width: "100%", height: "100%" }}
                 resizeMode="cover"
               />
-              <ThemedText family="secondary" variant="secondary" className="text-[11px] mt-1 text-right">
-                {formatTime(item.createdAt)}
-              </ThemedText>
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 6,
+                  right: 8,
+                  backgroundColor: "rgba(0,0,0,0.55)",
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 6,
+                }}
+              >
+                <ThemedText
+                  family="primary"
+                  weight="medium"
+                  style={{ fontSize: 10, lineHeight: 14, color: "#FFFFFF" }}
+                >
+                  {formatTime(item.createdAt)}
+                </ThemedText>
+              </View>
             </Pressable>
           ) : (
             <View
-              className="p-3 rounded-[16px] max-w-[80%]"
-              style={{ backgroundColor: app_colors.green[500] }}
+              style={{
+                maxWidth: 295,
+                paddingTop: 12,
+                paddingHorizontal: 12,
+                paddingBottom: 6,
+                borderRadius: 12,
+                borderTopLeftRadius: 0,
+                backgroundColor: isDark ? "#111111" : "#F8F8F8",
+                borderWidth: isDark ? 0.5 : 0,
+                borderColor: "#232323",
+              }}
             >
-              <ThemedText family="primary" weight="regular" className="text-b2 leading-5 !text-white">
+              <ThemedText
+                family="primary"
+                weight="medium"
+                style={{
+                  fontSize: 14,
+                  lineHeight: 18.2,
+                  color: isDark ? "#FFFFFF" : "#0D121C",
+                }}
+              >
                 {item.text}
               </ThemedText>
-              <ThemedText family="secondary" className="text-[11px] mt-1.5 !text-white/70 text-right">
+              <ThemedText
+                family="primary"
+                weight="medium"
+                style={{
+                  fontSize: 10,
+                  lineHeight: 19.2,
+                  color: "#B5B5B5",
+                  marginTop: 4,
+                }}
+              >
                 {formatTime(item.createdAt)}
               </ThemedText>
             </View>
           )}
-          {/* User name + avatar under the message */}
-          <View className="flex-row items-center mt-1.5 mr-1">
-            <ThemedText family="secondary" variant="secondary" className="text-[11px] mr-1.5">
-              {item.senderName}
-            </ThemedText>
-            <View className="w-5 h-5 rounded-full bg-[#E5E7EB] overflow-hidden">
-              {item.senderAvatar ? (
-                <Image source={{ uri: item.senderAvatar }} style={{ width: 20, height: 20 }} />
-              ) : (
-                <View className="w-5 h-5 rounded-full bg-[#BFDBFE] items-center justify-center">
-                  <ThemedText className="text-[8px] !text-blue-800" weight="bold">
-                    {(item.senderName || "U").charAt(0).toUpperCase()}
-                  </ThemedText>
-                </View>
-              )}
-            </View>
-          </View>
         </View>
       );
     }
 
-    // Agent message (same layout as system but different label)
+    // User Message (aligned to RIGHT)
     return (
-      <View className="mb-4">
-        <View className="flex-row items-center mb-1.5">
-          <View className="w-6 h-6 mr-2 rounded-full overflow-hidden bg-white dark:bg-[#111111] border border-[#E5E7EB] dark:border-[#333333] items-center justify-center">
-            <Image
-              source={isDark ? img.logoDarkPng : img.logolightPng}
-              style={{ width: 20, height: 20 }}
-              resizeMode="contain"
-            />
-          </View>
-          <ThemedText family="primary" weight="medium" className="text-b3">
-            {/* {agentDisplayName} */}
-            Atrader customer support
-          </ThemedText>
-        </View>
+      <View style={{ marginBottom: 16, alignItems: "flex-end", marginHorizontal: 20 }}>
+        {/* Bubble */}
         {item.type === "image" && item.imageUrl ? (
-          <Pressable className="ml-8 max-w-[75%]" onPress={() => handleImagePress(item.id!)}>
+          <Pressable
+            onPress={() => handleImagePress(item.id!)}
+            style={{
+              width: 295,
+              height: 190,
+              borderRadius: 12,
+              borderBottomRightRadius: 0,
+              overflow: "hidden",
+            }}
+          >
             <Image
               source={{ uri: item.imageUrl }}
-              style={{ width: 220, height: 160, borderRadius: 16 }}
+              style={{ width: "100%", height: "100%" }}
               resizeMode="cover"
             />
-            <ThemedText family="secondary" variant="secondary" className="text-[11px] mt-1">
-              {formatTime(item.createdAt)}
-            </ThemedText>
+            <View
+              style={{
+                position: "absolute",
+                bottom: 6,
+                right: 8,
+                backgroundColor: "rgba(0,0,0,0.55)",
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 6,
+              }}
+            >
+              <ThemedText
+                family="primary"
+                weight="medium"
+                style={{ fontSize: 10, lineHeight: 14, color: "#FFFFFF" }}
+              >
+                {formatTime(item.createdAt)}
+              </ThemedText>
+            </View>
           </Pressable>
         ) : (
           <View
-            className="ml-8 p-3 rounded-[16px] max-w-[85%]"
-            style={{ backgroundColor: isDark ? "#111111" : "#F5F5F5" }}
+            style={{
+              maxWidth: 295,
+              paddingTop: 12,
+              paddingHorizontal: 12,
+              paddingBottom: 6,
+              borderRadius: 12,
+              borderBottomRightRadius: 0,
+              backgroundColor: isDark ? "#0A2E02" : "#E8FFE4",
+            }}
           >
-            <ThemedText family="primary" weight="regular" className="text-b2 leading-5">
+            <ThemedText
+              family="primary"
+              weight="medium"
+              style={{
+                fontSize: 14,
+                lineHeight: 18.2,
+                color: isDark ? "#FFFFFF" : "#0D121C",
+              }}
+            >
               {item.text}
             </ThemedText>
-            <ThemedText family="secondary" variant="secondary" className="text-[11px] mt-1.5">
+            <ThemedText
+              family="primary"
+              weight="medium"
+              style={{
+                fontSize: 10,
+                lineHeight: 19.2,
+                color: isDark ? "#B5B5B5" : "#71717A",
+                marginTop: 4,
+              }}
+            >
               {formatTime(item.createdAt)}
             </ThemedText>
           </View>
         )}
+
+        {/* User name + avatar under the message */}
+        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+          <ThemedText
+            family="primary"
+            weight="medium"
+            style={{
+              fontSize: 12,
+              lineHeight: 15.6,
+              color: isDark ? "#FFFFFF" : "#4A4A4A",
+              marginRight: 8,
+            }}
+          >
+            {item.senderName}
+          </ThemedText>
+          <View
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              overflow: "hidden",
+              borderWidth: 0.5,
+              borderColor: isDark ? "#333333" : "#E6E6E6",
+              backgroundColor: "#E5E7EB",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {item.senderAvatar ? (
+              <Image source={{ uri: item.senderAvatar }} style={{ width: 24, height: 24 }} />
+            ) : (
+              <View
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: "#BFDBFE",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <ThemedText style={{ fontSize: 10, fontWeight: "bold", color: "#1E40AF" }}>
+                  {(item.senderName || "U").charAt(0).toUpperCase()}
+                </ThemedText>
+              </View>
+            )}
+          </View>
+        </View>
       </View>
     );
   };
 
-  // ============================================
+    // ============================================
   // Main Layout
   // ============================================
   return (
@@ -555,37 +677,21 @@ const TradeChat = () => {
         <Animated.View style={[{ flex: 1 }, animatedStyle]}>
           {/* Header */}
           <SafeAreaView edges={["top"]} className="bg-background-light dark:bg-background-dark">
-            <View className="flex-row items-center justify-between px-5 py-3">
-              <View className="flex-row items-center flex-1">
-                <Pressable onPress={() => router.back()} className="mr-3">
-                  <ArrowLeft size={24} color={isDark ? "#fff" : "#000"} />
-                </Pressable>
-                <View>
-                  <ThemedText family="primary" weight="semibold" className="text-lg">
-                    {isSupportChat ? "Gift Card Support" : "Trade support"}
-                  </ThemedText>
-                  {chatInfo?.assignedAgentName && (
-                    <ThemedText family="secondary" variant="secondary" className="text-[12px]">
-                      {/* {chatInfo.assignedAgentName || "Atrader customer support"} */}
-                      {"Atrader customer support"}
-                    </ThemedText>
-                  )}
-                </View>
-              </View>
-              {!isChatClosed && (
-                <Pressable
-                  onPress={handleEndChat}
-                  className="w-9 h-9 rounded-full items-center justify-center"
-                  style={{
-                    backgroundColor: isDark ? "#1A1A1A" : "#F3F4F6",
-                    borderWidth: 1,
-                    borderColor: isDark ? "#333" : "#E5E7EB",
-                  }}
-                  hitSlop={8}
-                >
-                  <X size={18} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                </Pressable>
-              )}
+            <View className="flex-row items-center px-5 py-3">
+              <Pressable onPress={() => router.back()} className="mr-3" hitSlop={10}>
+                <ArrowLeft size={24} color={isDark ? "#FFFFFF" : "#0C0C0C"} />
+              </Pressable>
+              <ThemedText
+                family="primary"
+                weight="medium"
+                style={{
+                  fontSize: 16,
+                  lineHeight: 19.2,
+                  color: isDark ? "#E7E7E7" : "#0C0C0C",
+                }}
+              >
+                {isSupportChat ? "Gift Card Support" : "Trade support"}
+              </ThemedText>
             </View>
           </SafeAreaView>
 
@@ -593,19 +699,34 @@ const TradeChat = () => {
           {!isSupportChat && (
             <Pressable className="mx-5 mt-2 mb-2" onPress={() => bottomSheetRef.current?.present()}>
               <View
-                className="flex-row items-center justify-between p-3 rounded-[16px] border"
                 style={{
-                  backgroundColor: isDark ? "#111111" : "#FAFAFA",
+                  height: 56,
+                  borderRadius: 20,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderWidth: 1,
                   borderColor: isDark ? "#232323" : "#EFEFEF",
+                  backgroundColor: isDark ? "#111111" : "#FFFFFF",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
-                <View className="flex-row items-center flex-1">
-                  <View className="w-10 h-10 rounded-full items-center justify-center mr-3 overflow-hidden">
+                <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 10 }}>
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 16,
+                      overflow: "hidden",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                      backgroundColor: isDark ? "#232323" : "#F3F4F6",
+                    }}
+                  >
                     {chatInfo?.cardImage ? (
-                      <Image
-                        source={{ uri: chatInfo.cardImage }}
-                        style={{ width: 40, height: 40 }}
-                      />
+                      <Image source={{ uri: chatInfo.cardImage }} style={{ width: 36, height: 36 }} />
                     ) : params.cardImage ? (
                       <Image
                         source={
@@ -613,21 +734,40 @@ const TradeChat = () => {
                             ? { uri: params.cardImage }
                             : undefined
                         }
-                        style={{ width: 40, height: 40 }}
+                        style={{ width: 36, height: 36 }}
                       />
                     ) : (
                       isDark ? (
-                        <img.giftcardDark width={40} height={40} />
+                        <img.giftcardDark width={36} height={36} />
                       ) : (
-                        <img.giftcardLight width={40} height={40} />
+                        <img.giftcardLight width={36} height={36} />
                       )
                     )}
                   </View>
-                  <View className="flex-1">
-                    <ThemedText family="primary" weight="bold" className="text-b2">
+                  <View style={{ flex: 1, justifyContent: "center" }}>
+                    <ThemedText
+                      family="primary"
+                      weight="medium"
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 14,
+                        lineHeight: 19.2,
+                        color: isDark ? "#FFFFFF" : "#0C0C0C",
+                      }}
+                    >
                       {chatInfo?.cardName || params.cardName || "Gift Card"}
                     </ThemedText>
-                    <ThemedText family="secondary" variant="secondary" className="text-b3">
+                    <ThemedText
+                      family="primary"
+                      weight="medium"
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 12,
+                        lineHeight: 14.4,
+                        color: isDark ? "#B5B5B5" : "#4A4A4A",
+                        marginTop: 2,
+                      }}
+                    >
                       {tradeData?.total_amount
                         ? `$${formatNumber(tradeData.total_amount)}`
                         : `$${formatNumber(chatInfo?.cardAmount || params.cardAmount || "0")}`} ~ {tradeData?.estimated
@@ -637,38 +777,51 @@ const TradeChat = () => {
                     </ThemedText>
                   </View>
                 </View>
-                <View className="flex-row items-center">
-                  <View
-                    className="px-3 py-1.5 rounded-full mr-2"
+
+                {/* Status Badge */}
+                <View
+                  style={{
+                    width: isTradeApproved ? 96 : isTradeRejected ? 82 : 88,
+                    height: 35,
+                    borderRadius: 100,
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    backgroundColor: statusBgColor,
+                    borderWidth: 1,
+                    borderColor: statusBorderColor,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ThemedText
+                    family="primary"
+                    weight="medium"
                     style={{
-                      backgroundColor: statusBgColor,
-                      borderWidth: 1,
-                      borderColor: statusBorderColor,
+                      fontSize: 14,
+                      lineHeight: 22.4,
+                      color: statusColor,
                     }}
                   >
-                    <ThemedText
-                      family="primary"
-                      weight="bold"
-                      className="text-[12px] capitalize"
-                      style={{ color: statusColor }}
-                    >
-                      {displayStatusText}
-                    </ThemedText>
-                  </View>
-                  <ChevronDown size={18} color={isDark ? "#9CA3AF" : "#6B7280"} />
+                    {displayStatusText}
+                  </ThemedText>
                 </View>
               </View>
             </Pressable>
           )}
 
           {/* Encryption Notice */}
-          <View className="px-5 mb-3">
+          <View style={{ marginHorizontal: 20, marginTop: 12, marginBottom: 12 }}>
             <ThemedText
-              family="secondary"
-              variant="secondary"
-              className="text-[11px] text-center leading-4"
+              family="primary"
+              weight="medium"
+              style={{
+                fontSize: 12,
+                lineHeight: 15.6,
+                textAlign: "center",
+                color: isDark ? "#B5B5B5" : "#4A4A4A",
+              }}
             >
-              This chat is encrypted between you and customer support{"\n"}and it has no data history
+              {"This chat is encrypted between you and customer support\nand it has no data hisotry"}
             </ThemedText>
           </View>
 
@@ -828,11 +981,16 @@ const TradeChat = () => {
                   </Pressable>
                 </View>
               ) : (
-                <View className="flex-row items-center gap-3">
+                <View className="flex-row items-center gap-2">
                   <View
-                    className="flex-1 flex-row items-center rounded-full px-4 h-12"
                     style={{
-                      backgroundColor: isDark ? "#111111" : "#FAFAFA",
+                      flex: 1,
+                      height: 46,
+                      borderRadius: 20,
+                      paddingHorizontal: 14,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: isDark ? "#0C0C0C" : "#FCFCFC",
                       borderWidth: 1,
                       borderColor: isDark ? "#232323" : "#EFEFEF",
                     }}
@@ -841,12 +999,12 @@ const TradeChat = () => {
                       value={inputText}
                       onChangeText={setInputText}
                       placeholder="Describe your issues"
-                      placeholderTextColor={isDark ? "#666" : "#A3A3A3"}
+                      placeholderTextColor={isDark ? "#B5B5B5" : "#4A4A4A"}
                       editable={true}
                       className="flex-1 text-[14px] h-full"
                       style={{
-                        color: isDark ? "#fff" : "#000",
-                        fontFamily: "MonaSans",
+                        color: isDark ? "#FFFFFF" : "#0C0C0C",
+                        fontSize: 14,
                       }}
                       multiline={false}
                       returnKeyType="send"
@@ -858,9 +1016,9 @@ const TradeChat = () => {
                       className="ml-2"
                     >
                       {isUploading ? (
-                        <ActivityIndicator size="small" color="#22C55E" />
+                        <ActivityIndicator size="small" color="#28A712" />
                       ) : (
-                        <ImagePlus size={22} color={isDark ? "#9CA3AF" : "#737373"} />
+                        <ImagePlus size={20} color={isDark ? "#B5B5B5" : "#4A4A4A"} />
                       )}
                     </Pressable>
                   </View>
@@ -868,41 +1026,26 @@ const TradeChat = () => {
                   <Pressable
                     onPress={handleSend}
                     disabled={!inputText.trim() || isSending}
-                    className="h-12 px-8 items-center justify-center rounded-full"
                     style={{
-                      backgroundColor:
-                        !inputText.trim()
-                          ? isDark ? "#1A1A1A" : "#D1D5DB"
-                          : app_colors.green[500],
+                      width: 68,
+                      height: 46,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: !inputText.trim()
+                        ? (isDark ? "#4A4A4A" : "#B5B5B5")
+                        : (isDark ? "#28A712" : "#28A712"),
                     }}
                   >
-                    {/* {isSending ? (
-                    // <ActivityIndicator size="small" color="#fff" />
-                    <></>
-                  ) : (
                     <ThemedText
                       family="primary"
-                      weight="bold"
-                      className="text-b2"
+                      weight="medium"
                       style={{
-                        color:
-                          !inputText.trim()
-                            ? isDark ? "#444" : "#9CA3AF"
-                            : "#fff",
-                      }}
-                    >
-                      Send
-                    </ThemedText>
-                  )} */}
-                    <ThemedText
-                      family="primary"
-                      weight="bold"
-                      className="text-b2"
-                      style={{
-                        color:
-                          !inputText.trim()
-                            ? isDark ? "#444" : "#9CA3AF"
-                            : "#fff",
+                        fontSize: 14,
+                        lineHeight: 16.8,
+                        color: !inputText.trim()
+                          ? (isDark ? "#CECECE" : "#FFFFFF")
+                          : "#FFFFFF",
                       }}
                     >
                       Send
