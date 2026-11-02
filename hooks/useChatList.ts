@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import {
   subscribeToUserChats,
-  getTotalUnreadCount,
+  getChatUnreadCount,
   type ChatDocument,
 } from '@/lib/firebase-chat-service';
 
@@ -21,20 +21,24 @@ export const useChatList = (userIdProp: string | null): any => {
     return () => unsubscribe();
   }, []);
 
-  // Subscribe to user's chat list in realtime
+  // Subscribe to user's chat list in realtime using all valid identifiers
   useEffect(() => {
-    if (!firebaseUid) {
-      if (!firebaseUid && userIdProp) setIsLoading(true);
-      else {
-        setChats([]);
-        setIsLoading(false);
-      }
+    const candidateIds = Array.from(
+      new Set(
+        [firebaseUid, userIdProp, getAuth().currentUser?.uid]
+          .filter((id): id is string => Boolean(id) && typeof id === "string" && id.trim().length > 0)
+      )
+    );
+
+    if (candidateIds.length === 0) {
+      setChats([]);
+      setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
 
-    const unsubscribChats = subscribeToUserChats(firebaseUid, (chatList) => {
+    const unsubscribChats = subscribeToUserChats(candidateIds, (chatList) => {
       setChats(chatList);
       setIsLoading(false);
     });
@@ -43,9 +47,9 @@ export const useChatList = (userIdProp: string | null): any => {
   }, [firebaseUid, userIdProp]);
 
   // Count of conversations with unread messages (WhatsApp tab behavior: count of unread chats)
-  const unreadConversationsCount = chats.filter((c) => (c.unreadByUser || 0) > 0).length;
+  const unreadConversationsCount = chats.filter((c) => getChatUnreadCount(c) > 0).length;
   // Total unread messages across all conversations (for push notifications / OS badges)
-  const totalUnreadMessages = chats.reduce((acc, c) => acc + (c.unreadByUser || 0), 0);
+  const totalUnreadMessages = chats.reduce((acc, c) => acc + getChatUnreadCount(c), 0);
 
   const [searchResults, setSearchResults] = useState<ChatDocument[]>([]);
   const searchChatList = async (queryText: string) => {

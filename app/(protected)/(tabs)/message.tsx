@@ -6,7 +6,7 @@ import { img } from "@/constant/image";
 import { useNotifications } from "@/context/NotificationsProvider";
 import { useTheme } from "@/context/ThemeProvider";
 import { useChatList } from "@/hooks/useChatList";
-import { createTradeChat, markChatReadByUser } from "@/lib/firebase-chat-service";
+import { createTradeChat, markChatReadByUser, getChatUnreadCount } from "@/lib/firebase-chat-service";
 import { openChat } from "@/lib/zoho-service";
 import { useAppSelector } from "@/redux/store";
 import { useRouter } from "expo-router";
@@ -129,8 +129,8 @@ const SupportChatScreen = () => {
       ? "Gift Card Support"
       : `Trade Support ~ ${item.cardName || "Gift Card"}`;
 
-    const isUnread = (item.unreadByUser || 0) > 0;
-    const unreadCount = item.unreadByUser || 0;
+    const unreadCount = getChatUnreadCount(item);
+    const isUnread = unreadCount > 0;
     const formattedCount = unreadCount > 99 ? "99+" : `${unreadCount}`;
 
     return (
@@ -317,8 +317,8 @@ const SupportChatScreen = () => {
     (c: any) => c.type !== "support" && !c.chatId?.startsWith("support_")
   );
 
-  const isSupportUnread = (supportChat?.unreadByUser || 0) > 0;
-  const supportUnreadCount = supportChat?.unreadByUser || 0;
+  const supportUnreadCount = getChatUnreadCount(supportChat);
+  const isSupportUnread = supportUnreadCount > 0;
   const formattedSupportCount = supportUnreadCount > 99 ? "99+" : `${supportUnreadCount}`;
 
   // Static App Support item at the top (Figma Frame 167 Row 0) - Always Open

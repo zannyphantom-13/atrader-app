@@ -3,6 +3,7 @@ import { ThemedText } from "@/components/theme/themeText";
 import { AVATARS, getAvatarById, icons } from "@/constant/icon";
 import { img } from "@/constant/image";
 import { useTheme } from "@/context/ThemeProvider";
+import { getAuth } from "firebase/auth";
 import { useChatList } from "@/hooks/useChatList";
 import { useAppSelector } from "@/redux/store";
 import { colorThemes } from "@/styles/theme";
@@ -20,7 +21,8 @@ const TabsLayout = () => {
   const { user, selectedAvatarId } = useAppSelector((state) => state.auth);
   const insets = useSafeAreaInsets();
   const { user: userInfo } = user || {};
-  const userId = userInfo?.email || userInfo?.id || "";
+  const currentAuthUid = getAuth().currentUser?.uid;
+  const userId = currentAuthUid || (userInfo?.email ? String(userInfo.email) : "") || (userInfo?.id ? String(userInfo.id) : "");
   const { totalUnread, unreadConversationsCount } = useChatList(userId);
   const router = useRouter();
   const NotificationIcon = icons.notification;
@@ -271,9 +273,10 @@ const TabsLayout = () => {
                 : unreadConversationsCount
               : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: "#22C55E",
-            color: "#fff",
+            backgroundColor: "#28A712",
+            color: "#FFFFFF",
             fontSize: 10,
+            fontWeight: "700",
           },
         }}
 

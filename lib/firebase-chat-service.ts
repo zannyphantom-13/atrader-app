@@ -51,7 +51,11 @@ export interface ChatDocument {
   lastMessage: string;
   lastMessageAt: Timestamp | null;
   lastMessageSender: SenderType;
-  unreadByUser: number;
+  unreadByUser?: number;
+  unreadByCustomer?: number;
+  unreadCount?: number;
+  unread_count?: number;
+  unread?: number;
   unreadByAgent: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -205,6 +209,22 @@ export const createTradeChat = async (
 };
 
 /**
+ * Universal helper to extract unread count for user across all supported schema variants
+ * (agent app uses unreadByCustomer, Cloud Functions use unreadByUser, standard uses unreadCount)
+ */
+export const getChatUnreadCount = (chat: any): number => {
+  if (!chat) return 0;
+  const count = Math.max(
+    Number(chat.unreadByCustomer || 0),
+    Number(chat.unreadByUser || 0),
+    Number(chat.unreadCount || 0),
+    Number(chat.unread_count || 0),
+    Number(chat.unread || 0)
+  );
+  return Math.max(0, isNaN(count) ? 0 : Math.floor(count));
+};
+
+/**
  * Send a message in a chat
  */
 export const sendMessage = async (
@@ -233,10 +253,16 @@ export const sendMessage = async (
 
   if (messageData.senderType === "user") {
     updateData.unreadByAgent = increment(1);
-    updateData.unreadByUser = 0; // reset user's unread since they just sent
+    updateData.unreadByUser = 0;
+    updateData.unreadByCustomer = 0;
+    updateData.unreadCount = 0;
+    updateData.unread_count = 0;
   } else {
     updateData.unreadByUser = increment(1);
-    updateData.unreadByAgent = 0; // reset agent's unread
+    updateData.unreadByCustomer = increment(1);
+    updateData.unreadCount = increment(1);
+    updateData.unread_count = increment(1);
+    updateData.unreadByAgent = 0;
   }
 
   await updateDoc(chatRef, updateData);
@@ -374,16 +400,21 @@ export const subscribeToChat = (
  * Subscribe to all chats for a user (for the message list screen)
  */
 export const subscribeToUserChats = (
-  userId: string,
+  userId: string | string[],
   callback: (chats: ChatDocument[]) => void,
 ): Unsubscribe => {
+  const ids = (Array.isArray(userId) ? userId : [userId])
+    .filter((id): id is string => Boolean(id) && typeof id === "string" && id.trim().length > 0);
+
+  if (ids.length === 0) {
+    callback([]);
+    return () => {};
+  }
+
   const chatsRef = collection(db, CHATS_COLLECTION);
-  const q = query(
-    chatsRef,
-    where("userId", "==", userId),
-    where("chatStatus", "!=", "deleted"),
-    orderBy("lastMessageAt", "desc"),
-  );
+  const q = ids.length === 1
+    ? query(chatsRef, where("userId", "==", ids[0]))
+    : query(chatsRef, where("userId", "in", ids.slice(0, 10)));
 
   return onSnapshot(
     q,
@@ -392,7 +423,23 @@ export const subscribeToUserChats = (
         ...doc.data(),
         chatId: doc.id,
       })) as ChatDocument[];
-      callback(chats);
+
+      // Client-side filtering and sorting to bypass composite index constraints
+      const filteredAndSorted = chats
+        .filter((c) => c.chatStatus !== "deleted")
+        .sort((a, b) => {
+          const getMillis = (ts: any) => {
+            if (!ts) return 0;
+            if (typeof ts.toMillis === "function") return ts.toMillis();
+            if (ts.seconds) return ts.seconds * 1000 + (ts.nanoseconds || 0) / 1e6;
+            if (typeof ts === "string") return new Date(ts).getTime();
+            if (ts instanceof Date) return ts.getTime();
+            return 0;
+          };
+          return getMillis(b.lastMessageAt) - getMillis(a.lastMessageAt);
+        });
+
+      callback(filteredAndSorted);
     },
     (error) => {
       console.error("[FirebaseChat] subscribeToUserChats error:", error);
@@ -405,11 +452,20 @@ export const subscribeToUserChats = (
  * Mark all messages in a chat as read by user
  */
 export const markChatReadByUser = async (chatId: string): Promise<void> => {
+  if (!chatId) return;
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
-  await updateDoc(chatRef, {
-    unreadByUser: 0,
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    await updateDoc(chatRef, {
+      unreadByUser: 0,
+      unreadByCustomer: 0,
+      unreadCount: 0,
+      unread_count: 0,
+      unread: 0,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn("[FirebaseChat] markChatReadByUser error:", err);
+  }
 };
 
 /**
@@ -502,31 +558,13 @@ export const getTradeChatId = async (
  * Get total unread count across all chats for a user
  */
 export const getTotalUnreadCount = (
-  userId: string,
+  userId: string | string[],
   callback: (count: number) => void,
 ): Unsubscribe => {
-  const chatsRef = collection(db, CHATS_COLLECTION);
-  const q = query(
-    chatsRef,
-    where("userId", "==", userId),
-    where("chatStatus", "==", "open"),
-  );
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      let total = 0;
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        total += data.unreadByUser || 0;
-      });
-      callback(total);
-    },
-    (error) => {
-      console.error("[FirebaseChat] getTotalUnreadCount error:", error);
-      callback(0);
-    },
-  );
+  return subscribeToUserChats(userId, (chats) => {
+    const total = chats.reduce((acc, c) => acc + getChatUnreadCount(c), 0);
+    callback(total);
+  });
 };
 
 export function fetchChatMetadataAsync(chatId: string): Promise<any> {
