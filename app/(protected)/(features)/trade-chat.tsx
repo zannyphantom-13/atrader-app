@@ -1,3 +1,4 @@
+import { setGlobalActiveChatId } from "@/components/customs/InAppNotificationBanner";
 import EndChatModal from "@/components/modals/EndChatModal";
 import { TradeDetailsDrawer } from "@/components/modals/TradeDetailsDrawer";
 import { MessageBubbleSkeleton } from "@/components/skeletons/chatskeleton";
@@ -114,15 +115,18 @@ const TradeChat = () => {
       : null);
 
   const [chatId, setChatId] = useState<string | null>(resolvedChatId);
+  useEffect(() => {
+    if (chatId) {
+      setGlobalActiveChatId(chatId);
+    }
+    return () => {
+      setGlobalActiveChatId(null);
+    };
+  }, [chatId]);
+
   const [inputText, setInputText] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [showEndChatModal, setShowEndChatModal] = useState(false);
-  // In-App Notification Banner state
-  const [inAppNotif, setInAppNotif] = useState<{ title: string; text: string } | null>(null);
-  const bannerAnim = useRef(new RNAnimated.Value(-120)).current;
-  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastMessageCountRef = useRef(0);
-  const isFirstRenderRef = useRef(true);
   // Snapshot of how many agent messages were unread when the chat was opened
   const openUnreadCountRef = useRef<number>(-1); // -1 = not yet seeded
   const [isEndingChat, setIsEndingChat] = useState(false);
@@ -414,56 +418,6 @@ const TradeChat = () => {
     }
   }, []);
 
-  // ── In-App Notification Banner ──
-  const showInAppBanner = useCallback((title: string, text: string) => {
-    if (bannerTimer.current) clearTimeout(bannerTimer.current);
-    setInAppNotif({ title, text } as { title: string; text: string });
-    RNAnimated.spring(bannerAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 10,
-    }).start();
-    bannerTimer.current = setTimeout(() => {
-      RNAnimated.timing(bannerAnim, {
-        toValue: -120,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => setInAppNotif(null));
-    }, 4000);
-  }, [bannerAnim]);
-
-  const dismissBanner = useCallback(() => {
-    if (bannerTimer.current) clearTimeout(bannerTimer.current);
-    RNAnimated.timing(bannerAnim, {
-      toValue: -120,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => setInAppNotif(null));
-  }, [bannerAnim]);
-
-  // Detect new agent messages while user is inside the chat
-  useEffect(() => {
-    const agentMessages = messages.filter(
-      (m) => m.senderType !== "user" && !isSystemMessage(m)
-    );
-    const currentCount = agentMessages.length;
-    // Seed ref on first load — do NOT show a banner
-    if (isFirstRenderRef.current) {
-      lastMessageCountRef.current = currentCount;
-      isFirstRenderRef.current = false;
-      return;
-    }
-    if (currentCount > lastMessageCountRef.current) {
-      const newest = agentMessages[agentMessages.length - 1];
-      const title = newest && newest.senderName ? newest.senderName : "ATrader Support";
-      const preview = newest && newest.type === "image"
-        ? "📷 Sent you an image"
-        : (newest && newest.text ? newest.text : "New message");
-      showInAppBanner(title, preview);
-    }
-    lastMessageCountRef.current = currentCount;
-  }, [messages, showInAppBanner]);
 
   // Seed the openUnreadCount from chatInfo on first valid read
   useEffect(() => {
@@ -1222,70 +1176,6 @@ const TradeChat = () => {
           </View>
         </Animated.View>
 
-        {/* In-App Notification Banner - WhatsApp style */}
-        {inAppNotif && (
-          <RNAnimated.View
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 12,
-              right: 12,
-              transform: [{ translateY: bannerAnim }],
-              backgroundColor: isDark ? "#1a1a1a" : "#1F2326",
-              borderRadius: 16,
-              padding: 14,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 12,
-              elevation: 20,
-              zIndex: 9999,
-              marginTop: Platform.OS === "android" ? 48 : 54,
-            }}
-          >
-            <Pressable
-              style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
-              onPress={dismissBanner}
-            >
-              <View
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 21,
-                  backgroundColor: "#28A712",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ThemedText style={{ fontSize: 22 }}>💬</ThemedText>
-              </View>
-              <View style={{ flex: 1 }}>
-                <ThemedText
-                  family="primary"
-                  weight="bold"
-                  numberOfLines={1}
-                  style={{ color: "#FFFFFF", fontSize: 14, marginBottom: 2 }}
-                >
-                  {inAppNotif.title}
-                </ThemedText>
-                <ThemedText
-                  family="primary"
-                  weight="regular"
-                  numberOfLines={1}
-                  style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}
-                >
-                  {inAppNotif.text}
-                </ThemedText>
-              </View>
-            </Pressable>
-            <Pressable onPress={dismissBanner} hitSlop={12}>
-              <X size={18} color="rgba(255,255,255,0.7)" />
-            </Pressable>
-          </RNAnimated.View>
-        )}
 
         {/* End Chat Modal */}
         <EndChatModal

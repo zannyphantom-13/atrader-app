@@ -1,3 +1,4 @@
+import { InAppNotificationBanner } from "@/components/customs/InAppNotificationBanner";
 import { useTheme } from "@/context/ThemeProvider";
 import { Stack, useRouter } from "expo-router";
 import { ArrowLeftIcon } from "lucide-react-native";
@@ -114,6 +115,7 @@ const ProtectedLayout = () => {
           }}
         />
       </Stack>
+      <InAppNotificationBanner />
     </>
   );
 };
