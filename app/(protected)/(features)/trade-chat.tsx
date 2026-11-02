@@ -46,13 +46,13 @@ const isKeyboardControllerLinked = Boolean(
 );
 
 let KeyboardController: any = {
-  setInputMode: () => {},
+  setInputMode: () => { },
 };
 let AndroidSoftInputModes: any = {
   SOFT_INPUT_ADJUST_NOTHING: 0,
   SOFT_INPUT_ADJUST_RESIZE: 0,
 };
-let useKeyboardHandler: any = (callbacks: any) => {};
+let useKeyboardHandler: any = (callbacks: any) => { };
 
 if (isKeyboardControllerLinked) {
   try {
@@ -280,26 +280,26 @@ const TradeChat = () => {
   const displayStatusText = isTradeApproved
     ? "Successful"
     : isTradeRejected
-    ? "Rejected"
-    : "Pending";
+      ? "Rejected"
+      : "Pending";
 
   const statusColor = isTradeApproved
     ? (isDark ? "#37C415" : "#28A712")
     : isTradeRejected
-    ? (isDark ? "#EF4444" : "#E53935")
-    : "#F59E0B";
+      ? (isDark ? "#EF4444" : "#E53935")
+      : "#F59E0B";
 
   const statusBgColor = isTradeApproved
     ? (isDark ? "#0B2E02" : "#E8FFE4")
     : isTradeRejected
-    ? (isDark ? "#300808" : "#FFE8E8")
-    : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
+      ? (isDark ? "#300808" : "#FFE8E8")
+      : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
 
   const statusBorderColor = isTradeApproved
     ? (isDark ? "#37C415" : "#28A712")
     : isTradeRejected
-    ? (isDark ? "#EF4444" : "#E53935")
-    : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
+      ? (isDark ? "#EF4444" : "#E53935")
+      : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
 
   // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved
   const isChatClosed =
@@ -662,7 +662,7 @@ const TradeChat = () => {
     );
   };
 
-    // ============================================
+  // ============================================
   // Main Layout
   // ============================================
   return (
@@ -885,9 +885,9 @@ const TradeChat = () => {
                     weight="medium"
                     style={{
                       fontSize: 14,
-                      lineHeight: 19.2,
+                      lineHeight: 18.2, // 130% line-height (14 * 1.3)
                       letterSpacing: 0,
-                      marginLeft: 10,
+                      marginLeft: 12,
                       color: isDark ? "#FFFFFF" : "#111111",
                     }}
                   >
