@@ -417,7 +417,8 @@ const TradeChat = () => {
     if (isSystem || !isUser) {
       // Support / Agent Message (aligned to LEFT)
       return (
-        <View style={{ marginBottom: 8, alignItems: "flex-start", width: 295, maxWidth: "100%" }}>
+        <View style={{ width: "100%", marginBottom: 8, paddingRight: 80 }}>
+          <View style={{ alignItems: "flex-start" }}>
           {/* Header with avatar + name */}
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
             <View
@@ -493,8 +494,7 @@ const TradeChat = () => {
           ) : (
             <View
               style={{
-                width: 295,
-                maxWidth: "100%",
+                maxWidth: 295,
                 paddingTop: 12,
                 paddingHorizontal: 12,
                 paddingBottom: 6,
@@ -531,13 +531,15 @@ const TradeChat = () => {
               </ThemedText>
             </View>
           )}
+          </View>
         </View>
       );
     }
 
     // User Message (aligned to RIGHT)
     return (
-      <View style={{ marginBottom: 8, alignItems: "flex-end", width: 295, maxWidth: "100%", alignSelf: "flex-end" }}>
+      <View style={{ width: "100%", marginBottom: 8, paddingLeft: 80 }}>
+        <View style={{ alignItems: "flex-end" }}>
         {/* Bubble */}
         {item.type === "image" && item.imageUrl ? (
           <Pressable
@@ -578,8 +580,7 @@ const TradeChat = () => {
         ) : (
           <View
             style={{
-              width: 295,
-              maxWidth: "100%",
+              maxWidth: 295,
               paddingTop: 12,
               paddingHorizontal: 12,
               paddingBottom: 6,
@@ -661,6 +662,7 @@ const TradeChat = () => {
               </View>
             )}
           </View>
+        </View>
         </View>
       </View>
     );
@@ -814,13 +816,14 @@ const TradeChat = () => {
           )}
 
           {/* Encryption Notice */}
-          <View style={{ marginHorizontal: 20, marginTop: 12, marginBottom: 12 }}>
+          <View style={{ width: 335, alignSelf: "center", marginTop: 12, marginBottom: 12 }}>
             <ThemedText
               family="primary"
               weight="medium"
               style={{
                 fontSize: 12,
                 lineHeight: 15.6,
+                letterSpacing: -0.17,
                 textAlign: "center",
                 color: isDark ? "#B5B5B5" : "#4A4A4A",
               }}
@@ -846,7 +849,6 @@ const TradeChat = () => {
               keyExtractor={(item) => item.id || String(Math.random())}
               style={{ flex: 1 }}
               contentContainerStyle={{
-                paddingHorizontal: 20,
                 paddingBottom: 10,
                 paddingTop: 10, // Added for inverted list top (which is visual bottom)
                 flexGrow: 1
