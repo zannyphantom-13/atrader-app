@@ -874,11 +874,11 @@ const TradeChat = () => {
                   {isTradeApproved ? (
                     <Image
                       source={img.tradeSuccessful}
-                      style={{ width: 35, height: 36 }}
+                      style={{ width: 40, height: 41 }}
                       resizeMode="contain"
                     />
                   ) : (
-                    <TradeRejectedIcon width={35} height={36} />
+                    <TradeRejectedIcon width={40} height={41} />
                   )}
                   <ThemedText
                     family="primary"
