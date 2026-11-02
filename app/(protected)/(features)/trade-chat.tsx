@@ -417,7 +417,7 @@ const TradeChat = () => {
     if (isSystem || !isUser) {
       // Support / Agent Message (aligned to LEFT)
       return (
-        <View style={{ width: "100%", marginBottom: 8, paddingRight: 80 }}>
+        <View style={{ width: "100%", marginBottom: 8, paddingLeft: 20, paddingRight: 80 }}>
           <View style={{ alignItems: "flex-start" }}>
           {/* Header with avatar + name */}
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
@@ -538,7 +538,7 @@ const TradeChat = () => {
 
     // User Message (aligned to RIGHT)
     return (
-      <View style={{ width: "100%", marginBottom: 8, paddingLeft: 80 }}>
+      <View style={{ width: "100%", marginBottom: 8, paddingLeft: 80, paddingRight: 20 }}>
         <View style={{ alignItems: "flex-end" }}>
         {/* Bubble */}
         {item.type === "image" && item.imageUrl ? (
