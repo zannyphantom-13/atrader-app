@@ -271,16 +271,9 @@ const TabsLayout = () => {
                 : unreadConversationsCount
               : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: isDark ? "#2BD14F" : "#1E9E3A",
-            color: isDark ? "#04210D" : "#FFFFFF",
+            backgroundColor: "#22C55E",
+            color: "#fff",
             fontSize: 10,
-            fontWeight: "700",
-            minWidth: 18,
-            height: 18,
-            borderRadius: 9,
-            borderWidth: 1.5,
-            borderColor: isDark ? "#0C0C0C" : "#FFFFFF",
-            lineHeight: 14,
           },
         }}
 
