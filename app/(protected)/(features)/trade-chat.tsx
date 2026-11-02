@@ -701,43 +701,80 @@ const TradeChat = () => {
           {/* Trade Status Bar (appears when trade is resolved) - HIDE FOR SUPPORT CHATS */}
           {!isSupportChat && (isTradeApproved || isTradeRejected) && (
             <View
-              className="px-5 py-3 mx-5 mb-2 rounded-[16px]"
               style={{
-                backgroundColor: isDark ? "#111111" : "#FAFAFA",
+                minHeight: 56,
+                height: (!rejectionReason || !isTradeRejected) ? 56 : undefined,
+                marginHorizontal: 20,
+                marginBottom: 8,
+                borderRadius: 20,
                 borderWidth: 1,
                 borderColor: isDark ? "#232323" : "#EFEFEF",
+                backgroundColor: isDark ? "#111111" : "#FAFAFA",
+                paddingHorizontal: 14,
+                paddingVertical: (!rejectionReason || !isTradeRejected) ? 0 : 10,
+                justifyContent: "center",
               }}
             >
               <View className="flex-row items-center justify-between">
+                {/* Icon + Label */}
                 <View className="flex-row items-center flex-1 mr-2">
                   {isTradeApproved ? (
                     <Image
                       source={img.tradeSuccessful}
-                      style={{ width: 32, height: 32 }}
+                      style={{ width: 35, height: 36 }}
                       resizeMode="contain"
                     />
                   ) : (
-                    <TradeRejectedIcon width={32} height={32} />
+                    <TradeRejectedIcon width={35} height={36} />
                   )}
-                  <ThemedText family="primary" weight="bold" className="text-b2 ml-3">
+                  <ThemedText
+                    family="primary"
+                    weight="medium"
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 19.2,
+                      letterSpacing: 0,
+                      marginLeft: 10,
+                      color: isDark ? "#FFFFFF" : "#111111",
+                    }}
+                  >
                     {isTradeApproved ? "Trade successful" : "Trade rejected"}
                   </ThemedText>
                 </View>
+
+                {/* End chat pill button */}
                 <Pressable
                   onPress={handleEndChat}
-                  className="px-4 py-2 rounded-[12px] border"
                   style={{
-                    borderColor: isDark ? "#333" : "#DDD",
-                    backgroundColor: isDark ? "#1A1A1A" : "#FFF",
+                    width: 84,
+                    height: 35,
+                    borderRadius: 100,
+                    paddingTop: 6,
+                    paddingBottom: 6,
+                    paddingLeft: 12,
+                    paddingRight: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: isDark ? "rgba(35, 35, 35, 1)" : "#E5E5E5",
                   }}
                 >
-                  <ThemedText family="primary" weight="medium" className="text-b3">
+                  <ThemedText
+                    family="primary"
+                    weight="medium"
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 19.2,
+                      color: isDark ? "#FFFFFF" : "#111111",
+                    }}
+                  >
                     End chat
                   </ThemedText>
                 </Pressable>
               </View>
+
+              {/* Rejection reason (if any) */}
               {isTradeRejected && !!rejectionReason && (
-                <View className="mt-2.5 pt-2 border-t border-gray-100 dark:border-[#202020]">
+                <View className="mt-2 pt-2 border-t border-gray-100 dark:border-[#202020]">
                   <ThemedText family="secondary" variant="secondary" className="text-[12px]">
                     Reason:{" "}
                     <ThemedText family="primary" weight="medium" className="text-[12px] !text-red-500">
@@ -748,8 +785,6 @@ const TradeChat = () => {
               )}
             </View>
           )}
-
-
 
           {/* Input Bar */}
           <View
