@@ -417,7 +417,7 @@ const TradeChat = () => {
     if (isSystem || !isUser) {
       // Support / Agent Message (aligned to LEFT)
       return (
-        <View style={{ marginBottom: 8, alignItems: "flex-start" }}>
+        <View style={{ marginBottom: 8, alignItems: "flex-start", width: 295, maxWidth: "100%" }}>
           {/* Header with avatar + name */}
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
             <View
@@ -493,7 +493,8 @@ const TradeChat = () => {
           ) : (
             <View
               style={{
-                maxWidth: 295,
+                width: 295,
+                maxWidth: "100%",
                 paddingTop: 12,
                 paddingHorizontal: 12,
                 paddingBottom: 6,
@@ -523,6 +524,7 @@ const TradeChat = () => {
                   lineHeight: 19.2,
                   color: "#B5B5B5",
                   marginTop: 4,
+                  textAlign: "left",
                 }}
               >
                 {formatTime(item.createdAt)}
@@ -535,7 +537,7 @@ const TradeChat = () => {
 
     // User Message (aligned to RIGHT)
     return (
-      <View style={{ marginBottom: 8, alignItems: "flex-end" }}>
+      <View style={{ marginBottom: 8, alignItems: "flex-end", width: 295, maxWidth: "100%", alignSelf: "flex-end" }}>
         {/* Bubble */}
         {item.type === "image" && item.imageUrl ? (
           <Pressable
@@ -576,13 +578,14 @@ const TradeChat = () => {
         ) : (
           <View
             style={{
-              maxWidth: 295,
+              width: 295,
+              maxWidth: "100%",
               paddingTop: 12,
               paddingHorizontal: 12,
               paddingBottom: 6,
               borderRadius: 12,
               borderBottomRightRadius: 0,
-              backgroundColor: isDark ? "#0A2E02" : "#E8FFE4",
+              backgroundColor: isDark ? "#0B2E02" : "#E8FFE4",
             }}
           >
             <ThemedText
@@ -604,6 +607,7 @@ const TradeChat = () => {
                 lineHeight: 19.2,
                 color: isDark ? "#B5B5B5" : "#71717A",
                 marginTop: 4,
+                textAlign: "right",
               }}
             >
               {formatTime(item.createdAt)}
@@ -874,7 +878,7 @@ const TradeChat = () => {
                   {isTradeApproved ? (
                     <Image
                       source={img.tradeSuccessful}
-                      style={{ width: 40, height: 41 }}
+                      style={{ width: 60, height: 61 }}
                       resizeMode="contain"
                     />
                   ) : (
@@ -887,7 +891,7 @@ const TradeChat = () => {
                       fontSize: 14,
                       lineHeight: 18.2, // 130% line-height (14 * 1.3)
                       letterSpacing: 0,
-                      marginLeft: 12,
+                      marginLeft: -1,
                       color: isDark ? "#FFFFFF" : "#111111",
                     }}
                   >
