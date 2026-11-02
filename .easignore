@@ -7,7 +7,10 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native builds
+# Native builds & archives
+*.apk
+*.aab
+*.zip
 .kotlin/
 *.orig.*
 *.jks
@@ -24,10 +27,12 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# OS
+# OS & Temp
 .DS_Store
 *.pem
 Thumbs.db
+WhatsApp*
+.cursor/
 
 # TypeScript
 *.tsbuildinfo
