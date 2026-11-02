@@ -123,6 +123,8 @@ const TradeChat = () => {
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageCountRef = useRef(0);
   const isFirstRenderRef = useRef(true);
+  // Snapshot of how many agent messages were unread when the chat was opened
+  const openUnreadCountRef = useRef<number>(-1); // -1 = not yet seeded
   const [isEndingChat, setIsEndingChat] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [visibleImageIndex, setVisibleImageIndex] = useState(0);
@@ -463,6 +465,18 @@ const TradeChat = () => {
     lastMessageCountRef.current = currentCount;
   }, [messages, showInAppBanner]);
 
+  // Seed the openUnreadCount from chatInfo on first valid read
+  useEffect(() => {
+    if (openUnreadCountRef.current === -1 && chatInfo !== null) {
+      const raw =
+        (chatInfo as any).unreadByCustomer |
+        (chatInfo as any).unreadByUser |
+        (chatInfo as any).unreadCount |
+        0;
+      openUnreadCountRef.current = Math.max(0, Number(raw) || 0);
+    }
+  }, [chatInfo]);
+
   const formatTime = (timestamp: Timestamp | null | undefined) => {
     if (!timestamp) return "";
     try {
@@ -477,6 +491,21 @@ const TradeChat = () => {
   // Render Message Bubble
   // ============================================
   const chronologicalMessages = React.useMemo(() => [...messages].reverse(), [messages]);
+  // Index in chronologicalMessages where unread agent messages start
+  const unreadStartIndex = React.useMemo(() => {
+    const count = openUnreadCountRef.current;
+    if (count <= 0) return -1;
+    // Count agent (non-system, non-user) messages from the END (newest)
+    let agentSeen = 0;
+    for (let i = chronologicalMessages.length - 1; i >= 0; i--) {
+      const m = chronologicalMessages[i];
+      if (m.senderType !== "user" && !isSystemMessage(m)) {
+        agentSeen++;
+        if (agentSeen === count) return i;
+      }
+    }
+    return -1;
+  }, [chronologicalMessages, openUnreadCountRef.current]);
 
   const imageMessages = React.useMemo(() => {
     return chronologicalMessages.filter(msg => msg.type === "image" && msg.imageUrl);
@@ -496,9 +525,45 @@ const TradeChat = () => {
     setVisibleImageIndex(currentIndex);
   };
 
-  const renderMessage = ({ item }: { item: MessageDocument }) => {
+  const renderMessage = ({ item, index }: { item: MessageDocument; index: number }) => {
     const isSystem = isSystemMessage(item);
     const isUser = item.senderType === "user";
+
+    // Unread divider: appears above the first unread agent message
+    const flatUnreadStart = unreadStartIndex >= 0
+      ? (chronologicalMessages.length - 1) - unreadStartIndex
+      : -1;
+    const showDivider = flatUnreadStart >= 0 && index === flatUnreadStart;
+    const isUnreadMessage = flatUnreadStart >= 0 && index <= flatUnreadStart
+      && item.senderType !== "user" && !isSystemMessage(item);
+
+    const dividerEl = showDivider ? (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginVertical: 12,
+          marginHorizontal: 4,
+          paddingHorizontal: 16,
+        }}
+      >
+        <View style={{ flex: 1, height: 1, backgroundColor: "#28A712", opacity: 0.4 }} />
+        <ThemedText
+          family="primary"
+          weight="bold"
+          style={{
+            color: "#28A712",
+            fontSize: 11,
+            marginHorizontal: 10,
+            backgroundColor: isDark ? "#0C0C0C" : "#FFFFFF",
+            paddingHorizontal: 6,
+          }}
+        >
+          {openUnreadCountRef.current} unread {openUnreadCountRef.current === 1 ? "message" : "messages"}
+        </ThemedText>
+        <View style={{ flex: 1, height: 1, backgroundColor: "#28A712", opacity: 0.4 }} />
+      </View>
+    ) : null;
 
     if (isSystem) {
       // System Message (centered notification)
@@ -534,7 +599,9 @@ const TradeChat = () => {
     if (!isUser) {
       // Support / Agent Message (aligned to LEFT)
       return (
-        <View style={{ width: "100%", marginBottom: 8, paddingLeft: 20, paddingRight: 80 }}>
+        <>
+          {dividerEl}
+          <View style={{ width: "100%", marginBottom: 8, paddingLeft: 20, paddingRight: 80 }}>
           <View style={{ alignItems: "flex-start" }}>
             {/* Header with avatar + name */}
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
@@ -617,9 +684,11 @@ const TradeChat = () => {
                   paddingBottom: 6,
                   borderRadius: 12,
                   borderTopLeftRadius: 0,
-                  backgroundColor: isDark ? "#111111" : "#F8F8F8",
-                  borderWidth: isDark ? 0.5 : 0,
-                  borderColor: "#232323",
+                  backgroundColor: isUnreadMessage
+                    ? (isDark ? "#0d1f0a" : "#EEF9EC")
+                    : (isDark ? "#111111" : "#F8F8F8"),
+                  borderWidth: isUnreadMessage ? 1 : (isDark ? 0.5 : 0),
+                  borderColor: isUnreadMessage ? "#28A712" : "#232323",
                 }}
               >
                 <ThemedText
@@ -650,6 +719,7 @@ const TradeChat = () => {
             )}
           </View>
         </View>
+        </>
       );
     }
 
