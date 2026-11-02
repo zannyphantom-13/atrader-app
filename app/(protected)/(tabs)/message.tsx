@@ -139,21 +139,21 @@ const SupportChatScreen = () => {
         style={{
           flexDirection: "row",
           alignItems: "center",
-          minHeight: 66,
+          minHeight: 76,
           paddingHorizontal: 20,
-          paddingVertical: 12,
+          paddingVertical: 14,
           borderBottomWidth: 1,
           borderBottomColor: isDark ? "#232323" : "#EFEFEF",
         }}
       >
         {/* Avatar (36x36px circle) */}
-        <View style={{ width: 36, height: 36, marginRight: 12, position: "relative" }}>
+        <View style={{ width: 46, height: 46, marginRight: 14, position: "relative" }}>
           {isAppSupport ? (
             <View
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 46,
+                height: 46,
+                borderRadius: 23,
                 alignItems: "center",
                 justifyContent: "center",
                 overflow: "hidden",
@@ -164,16 +164,16 @@ const SupportChatScreen = () => {
             >
               <Image
                 source={isDark ? img.logoDarkPng : img.logolightPng}
-                style={{ width: 24, height: 26 }}
+                style={{ width: 34, height: 36 }}
                 resizeMode="contain"
               />
             </View>
           ) : item.cardImage ? (
             <View
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 46,
+                height: 46,
+                borderRadius: 23,
                 backgroundColor: isDark ? "#232323" : "#E5E7EB",
                 alignItems: "center",
                 justifyContent: "center",
@@ -187,22 +187,21 @@ const SupportChatScreen = () => {
                     ? { uri: item.cardImage }
                     : undefined
                 }
-                style={{ width: 36, height: 36 }}
-                resizeMode="cover"
+                style={{ width: 46, height: 46 }} resizeMode="cover"
               />
             </View>
           ) : (
             <View
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 46,
+                height: 46,
+                borderRadius: 23,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: isDark ? "#111111" : "#F3F4F6",
               }}
             >
-              <Image source={img.logoGreen} style={{ width: 24, height: 26 }} resizeMode="contain" />
+              <Image source={img.logoGreen} style={{ width: 34, height: 36 }} resizeMode="contain" />
             </View>
           )}
 
@@ -211,11 +210,11 @@ const SupportChatScreen = () => {
             <View
               style={{
                 position: "absolute",
-                bottom: -1,
-                right: -1,
-                width: 10,
-                height: 10,
-                borderRadius: 5,
+                bottom: 0,
+                right: 0,
+                width: 12,
+                height: 12,
+                borderRadius: 6,
                 borderWidth: 1.5,
                 backgroundColor: "#28A712",
                 borderColor: isDark ? "#0C0C0C" : "#FFFFFF",
@@ -232,8 +231,8 @@ const SupportChatScreen = () => {
               family="primary"
               weight={isUnread ? "bold" : "semibold"}
               style={{
-                fontSize: 14,
-                lineHeight: 19.2,
+                fontSize: 15,
+                lineHeight: 20.5,
                 color: isDark ? "#FFFFFF" : "#0C0C0C",
                 flex: 1,
                 marginRight: 8,
@@ -246,8 +245,8 @@ const SupportChatScreen = () => {
               family="primary"
               weight={isUnread ? "medium" : "regular"}
               style={{
-                fontSize: 12,
-                lineHeight: 14.4,
+                fontSize: 13,
+                lineHeight: 16.5,
                 letterSpacing: -0.165,
                 color: isUnread
                   ? "#28A712"
@@ -264,8 +263,8 @@ const SupportChatScreen = () => {
               family="primary"
               weight={isUnread ? "medium" : "regular"}
               style={{
-                fontSize: 12,
-                lineHeight: 14.4,
+                fontSize: 13,
+                lineHeight: 16.5,
                 letterSpacing: -0.165,
                 color: isUnread
                   ? (isDark ? "#F1F3F4" : "#1F2326")
@@ -328,21 +327,21 @@ const SupportChatScreen = () => {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        minHeight: 66,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
+        minHeight: 76,
+          paddingHorizontal: 20,
+          paddingVertical: 14,
         borderBottomWidth: 1,
         borderBottomColor: isDark ? "#232323" : "#EFEFEF",
       }}
     >
       <View
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: 18,
+          width: 46,
+          height: 46,
+          borderRadius: 23,
           alignItems: "center",
           justifyContent: "center",
-          marginRight: 12,
+          marginRight: 14,
           overflow: "hidden",
           borderWidth: 0.5,
           borderColor: isDark ? "#333333" : "#E5E7EB",
@@ -351,7 +350,7 @@ const SupportChatScreen = () => {
       >
         <Image
           source={isDark ? img.logoDarkPng : img.logolightPng}
-          style={{ width: 24, height: 26 }}
+          style={{ width: 34, height: 36 }}
           resizeMode="contain"
         />
       </View>
@@ -361,11 +360,10 @@ const SupportChatScreen = () => {
             family="primary"
             weight={isSupportUnread ? "bold" : "semibold"}
             style={{
-              fontSize: 14,
-              lineHeight: 19.2,
+              fontSize: 15,
+              lineHeight: 20.5,
               color: isDark ? "#FFFFFF" : "#0C0C0C",
-            }}
-          >
+            }}>
             App Support
           </ThemedText>
           {supportChat?.lastMessageAt && (
@@ -444,8 +442,8 @@ const SupportChatScreen = () => {
             family="primary"
             weight="semibold"
             style={{
-              fontSize: 22,
-              lineHeight: 26.4,
+              fontSize: 24,
+              lineHeight: 28.8,
               letterSpacing: -0.165,
               color: isDark ? "#FFFFFF" : "#0C0C0C",
             }}

@@ -63,7 +63,7 @@ export const ChatListSkeleton = () => {
       }}
     >
       <View className="mr-3">
-        <SkeletonItem width={44} height={44} borderRadius={22} />
+        <SkeletonItem width={46} height={46} borderRadius={23} />
       </View>
 
       <View className="flex-1 mr-2 gap-2">
