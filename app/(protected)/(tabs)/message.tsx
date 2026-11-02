@@ -6,7 +6,7 @@ import { img } from "@/constant/image";
 import { useNotifications } from "@/context/NotificationsProvider";
 import { useTheme } from "@/context/ThemeProvider";
 import { useChatList } from "@/hooks/useChatList";
-import { createTradeChat } from "@/lib/firebase-chat-service";
+import { createTradeChat, markChatReadByUser } from "@/lib/firebase-chat-service";
 import { openChat } from "@/lib/zoho-service";
 import { useAppSelector } from "@/redux/store";
 import app_colors from "@/styles/color";
@@ -19,7 +19,7 @@ import {
   FlatList,
   Image,
   Pressable,
-  View
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -57,13 +57,18 @@ const SupportChatScreen = () => {
   const { user: userInfo } = user || {};
   const userId = getAuth().currentUser?.uid || userInfo?.email || userInfo?.id || "";
 
-  const { chats, totalUnread, isLoading } = useChatList(userId);
+  const { chats, isLoading } = useChatList(userId);
   const [showChatTypeModal, setShowChatTypeModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
   // Navigate to trade chat
   const handleOpenChat = useCallback(
     (chatId: string, cardName: string, tradeId: string | null) => {
+      // Optimistic mark-read for instant feedback
+      markChatReadByUser(chatId).catch((err) =>
+        console.warn("[SupportChat] markChatReadByUser failed:", err)
+      );
+
       router.push({
         pathname: "/(protected)/(features)/trade-chat" as any,
         params: {
@@ -79,16 +84,14 @@ const SupportChatScreen = () => {
   );
 
   // Handle Gift Card Issues from modal
-  // Handle Gift Card Issues from modal
   const handleGiftCardIssue = useCallback(async () => {
     if (!user) return;
     setShowChatTypeModal(false);
     setIsCreating(true);
 
     try {
-      // Use a stable ID for general support so it's a single continuous thread
       const chatId = await createTradeChat({
-        tradeId: "", // Not a trade
+        tradeId: "",
         userId: getAuth().currentUser?.uid || user.id || "",
         userName: userInfo?.name || userInfo?.username || "User",
         userAvatar: userInfo?.profile_picture || null,
@@ -106,9 +109,9 @@ const SupportChatScreen = () => {
     } finally {
       setIsCreating(false);
     }
-  }, [user, expoPushToken, handleOpenChat]);
+  }, [user, expoPushToken, handleOpenChat, userInfo]);
 
-  // Handle App Support from modal → open Zoho
+  // Handle App Support from modal -> open Zoho
   const handleAppSupport = useCallback(() => {
     openChat("App Support");
   }, []);
@@ -119,14 +122,25 @@ const SupportChatScreen = () => {
       ? "Gift Card Support"
       : `Trade Support ~ ${item.cardName || "Gift Card"}`;
 
+    const isUnread = (item.unreadByUser || 0) > 0;
+    const unreadCount = item.unreadByUser || 0;
+    const formattedCount = unreadCount > 99 ? "99+" : `${unreadCount}`;
+
     return (
       <Pressable
         onPress={() => handleOpenChat(item.chatId, item.cardName, item.tradeId)}
-        className="flex-row items-center px-5 py-4"
-        style={{
-          borderBottomWidth: 0.5,
-          borderBottomColor: isDark ? "#1a1a1a" : "#F3F4F6",
-        }}
+        accessibilityLabel={`${title}, ${isUnread ? `${formattedCount} unread messages` : "no unread messages"}, ${formatTimestamp(item.lastMessageAt)}`}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 20,
+          paddingVertical: 14,
+          backgroundColor: pressed
+            ? (isDark ? "#16191B" : "#F2F4F5")
+            : (isDark ? "#0B0D0E" : "#FFFFFF"),
+          borderBottomWidth: 1,
+          borderBottomColor: isDark ? "#1F2326" : "#E6E8EA",
+        })}
       >
         {/* Avatar */}
         <View className="relative mr-3">
@@ -142,7 +156,6 @@ const SupportChatScreen = () => {
                 }}
                 resizeMode="contain"
               />
-              {/* <img.chatr width={44} height={44} /> */}
             </View>
           ) : item.cardImage ? (
             <View className="w-11 h-11 rounded-full bg-[#E5E7EB] dark:bg-[#232323] items-center justify-center overflow-hidden">
@@ -161,42 +174,93 @@ const SupportChatScreen = () => {
               <Image source={img.logoGreen} style={{ width: 32, height: 32 }} resizeMode="contain" />
             </View>
           )}
+
           {/* Online indicator */}
           {item.chatStatus === "open" && item.assignedAgent && (
             <View
               className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2"
               style={{
-                backgroundColor: "#22C55E",
-                borderColor: isDark ? "#0C0C0C" : "#FFFFFF",
+                backgroundColor: isDark ? "#2BD14F" : "#1E9E3A",
+                borderColor: isDark ? "#0B0D0E" : "#FFFFFF",
               }}
             />
           )}
         </View>
 
-        {/* Chat Info */}
+        {/* Chat Info (Title + Preview) */}
         <View className="flex-1 mr-2">
-          <ThemedText family="primary" weight="semibold" className="text-[14px]" numberOfLines={1}>
+          <ThemedText
+            family="primary"
+            weight={isUnread ? "bold" : "semibold"}
+            style={{
+              fontSize: 14,
+              lineHeight: 18.2,
+              color: isUnread
+                ? (isDark ? "#FFFFFF" : "#0B0D0E")
+                : (isDark ? "#E4E7E9" : "#1F2326"),
+            }}
+            numberOfLines={1}
+          >
             {title}
           </ThemedText>
           <ThemedText
             family="secondary"
-            weight="medium"
-            className="text-[13px] mt-1 !text-[#4B5563] dark:!text-[#9CA3AF]"
+            weight={isUnread ? "medium" : "regular"}
+            style={{
+              fontSize: 13,
+              lineHeight: 16.9,
+              marginTop: 4,
+              color: isUnread
+                ? (isDark ? "#F1F3F4" : "#1F2326")
+                : (isDark ? "#8A9196" : "#6B7378"),
+            }}
             numberOfLines={1}
           >
             {item.lastMessage || "No messages yet"}
           </ThemedText>
         </View>
 
-        {/* Timestamp + Unread */}
-        <View className="items-end">
-          <ThemedText family="secondary" variant="secondary" className="text-[11px] mb-1">
+        {/* Timestamp + Unread Badge Column */}
+        <View style={{ alignItems: "flex-end", justifyContent: "center", marginLeft: 8, flexShrink: 0 }}>
+          <ThemedText
+            family="secondary"
+            style={{
+              fontSize: 11,
+              lineHeight: 14.3,
+              color: isUnread
+                ? (isDark ? "#2BD14F" : "#1E9E3A")
+                : (isDark ? "#6B7378" : "#8A9196"),
+              fontWeight: isUnread ? "600" : "400",
+            }}
+          >
             {formatTimestamp(item.lastMessageAt)}
           </ThemedText>
-          {item.unreadByUser > 0 && (
-            <View className="bg-[#22C55E] w-5 h-5 rounded-full items-center justify-center">
-              <ThemedText className="text-[10px] !text-white" weight="bold">
-                {item.unreadByUser > 9 ? "9+" : item.unreadByUser}
+
+          {isUnread && (
+            <View
+              style={{
+                marginTop: 6,
+                minWidth: 20,
+                height: 20,
+                paddingHorizontal: 6,
+                borderRadius: 10,
+                backgroundColor: isDark ? "#2BD14F" : "#1E9E3A",
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "flex-end",
+              }}
+            >
+              <ThemedText
+                family="primary"
+                weight="bold"
+                style={{
+                  fontSize: 12,
+                  lineHeight: 16,
+                  color: isDark ? "#04210D" : "#FFFFFF",
+                  textAlign: "center",
+                }}
+              >
+                {formattedCount}
               </ThemedText>
             </View>
           )}
@@ -209,11 +273,17 @@ const SupportChatScreen = () => {
   const renderHeader = () => (
     <Pressable
       onPress={() => openChat("App Support")}
-      className="flex-row items-center px-5 py-4"
-      style={{
-        borderBottomWidth: 0.5,
-        borderBottomColor: isDark ? "#1a1a1a" : "#F3F4F6",
-      }}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        backgroundColor: pressed
+          ? (isDark ? "#16191B" : "#F2F4F5")
+          : (isDark ? "#0B0D0E" : "#FFFFFF"),
+        borderBottomWidth: 1,
+        borderBottomColor: isDark ? "#1F2326" : "#E6E8EA",
+      })}
     >
       <View
         className="w-11 h-11 items-center justify-center mr-3 rounded-full border border-[#E5E7EB] dark:border-[#333333] overflow-hidden bg-white dark:bg-[#111111]"
@@ -228,14 +298,26 @@ const SupportChatScreen = () => {
         />
       </View>
       <View className="flex-1">
-        <ThemedText family="primary" weight="bold" className="text-[14px]">
+        <ThemedText
+          family="primary"
+          weight="semibold"
+          style={{
+            fontSize: 14,
+            lineHeight: 18.2,
+            color: isDark ? "#E4E7E9" : "#1F2326",
+          }}
+        >
           App Support
         </ThemedText>
         <ThemedText
           family="secondary"
-          variant="secondary"
           weight="regular"
-          className="text-b3 mt-0.5"
+          style={{
+            fontSize: 12,
+            lineHeight: 15.6,
+            marginTop: 4,
+            color: isDark ? "#8A9196" : "#6B7378",
+          }}
           numberOfLines={1}
         >
           Chat with us for general help
@@ -246,10 +328,18 @@ const SupportChatScreen = () => {
 
   return (
     <ThemedView className="flex-1">
-      <SafeAreaView edges={["top"]} className="flex-1 bg-background-light dark:bg-background-dark">
+      <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: isDark ? "#0B0D0E" : "#FFFFFF" }}>
         {/* Title */}
-        <View className="px-5 pt-4 pb-3">
-          <ThemedText family="primary" weight="semibold" className="text-[18px]">
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
+          <ThemedText
+            family="primary"
+            weight="bold"
+            style={{
+              fontSize: 18,
+              lineHeight: 23.4,
+              color: isDark ? "#FFFFFF" : "#0B0D0E",
+            }}
+          >
             Support Chat
           </ThemedText>
         </View>
@@ -271,8 +361,17 @@ const SupportChatScreen = () => {
             contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
             ListEmptyComponent={() => (
               <View className="items-center justify-center py-20">
-                <MessageSquare size={48} color={isDark ? "#333" : "#D1D5DB"} />
-                <ThemedText variant="secondary" className="text-b2 mt-4 text-center">
+                <MessageSquare size={48} color={isDark ? "#3A4146" : "#D1D5DB"} />
+                <ThemedText
+                  family="secondary"
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 19.6,
+                    color: isDark ? "#8A9196" : "#6B7378",
+                    marginTop: 16,
+                    textAlign: "center",
+                  }}
+                >
                   No trade chats yet.{"\n"}Start a trade to begin chatting!
                 </ThemedText>
               </View>
@@ -283,11 +382,11 @@ const SupportChatScreen = () => {
         {/* FAB - Chat us here */}
         <Pressable
           onPress={() => setShowChatTypeModal(true)}
-          className="absolute right-5 flex-row items-center px-2 py-2 rounded-[10px] shadow-lg"
+          className="absolute right-5 flex-row items-center px-3 py-2.5 rounded-[12px] shadow-lg"
           style={{
             bottom: 20,
-            backgroundColor: app_colors.green[500],
-            shadowColor: app_colors.green[500],
+            backgroundColor: isDark ? "#2BD14F" : "#1E9E3A",
+            shadowColor: isDark ? "#2BD14F" : "#1E9E3A",
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 8,
@@ -295,7 +394,15 @@ const SupportChatScreen = () => {
           }}
         >
           <img.chatr width={20} height={20} />
-          <ThemedText family="primary" weight="bold" className="text-[14px] !text-white ml-2">
+          <ThemedText
+            family="primary"
+            weight="bold"
+            style={{
+              fontSize: 14,
+              color: isDark ? "#04210D" : "#FFFFFF",
+              marginLeft: 8,
+            }}
+          >
             Chat us here
           </ThemedText>
         </Pressable>

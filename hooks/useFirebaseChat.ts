@@ -33,7 +33,6 @@ export const useFirebaseChat = (
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const hasMarkedRead = useRef(false);
   const [isAuthReady, setIsAuthReady] = useState(() => !!getAuth().currentUser);
 
   useEffect(() => {
@@ -53,16 +52,16 @@ export const useFirebaseChat = (
       setMessages(msgs);
       setIsLoading(false);
 
-      // Mark as read when messages come in
-      if (!hasMarkedRead.current && msgs.length > 0) {
-        markChatReadByUser(chatId);
-        hasMarkedRead.current = true;
+      // Mark as read whenever new messages arrive while user is viewing the chat
+      if (msgs.length > 0) {
+        markChatReadByUser(chatId).catch((err) =>
+          console.warn('[useFirebaseChat] markChatReadByUser failed:', err)
+        );
       }
     });
 
     return () => {
       unsubscribe();
-      hasMarkedRead.current = false;
     };
   }, [chatId, isAuthReady]);
 
@@ -80,7 +79,9 @@ export const useFirebaseChat = (
   // Mark as read when user opens chat
   useEffect(() => {
     if (chatId && isAuthReady) {
-      markChatReadByUser(chatId);
+      markChatReadByUser(chatId).catch((err) =>
+        console.warn('[useFirebaseChat] initial markChatReadByUser failed:', err)
+      );
     }
   }, [chatId, isAuthReady]);
 

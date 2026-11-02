@@ -21,7 +21,7 @@ const TabsLayout = () => {
   const insets = useSafeAreaInsets();
   const { user: userInfo } = user || {};
   const userId = userInfo?.email || userInfo?.id || "";
-  const { totalUnread } = useChatList(userId);
+  const { totalUnread, unreadConversationsCount } = useChatList(userId);
   const router = useRouter();
   const NotificationIcon = icons.notification;
   const NotificationLight = icons.notificationLight;
@@ -264,11 +264,23 @@ const TabsLayout = () => {
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} tabName="message" />
           ),
-          tabBarBadge: totalUnread > 0 ? totalUnread : undefined,
+          tabBarBadge:
+            unreadConversationsCount > 0
+              ? unreadConversationsCount > 99
+                ? "99+"
+                : unreadConversationsCount
+              : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: "#22C55E",
-            color: "#fff",
+            backgroundColor: isDark ? "#2BD14F" : "#1E9E3A",
+            color: isDark ? "#04210D" : "#FFFFFF",
             fontSize: 10,
+            fontWeight: "700",
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            borderWidth: 1.5,
+            borderColor: isDark ? "#0C0C0C" : "#FFFFFF",
+            lineHeight: 14,
           },
         }}
 

@@ -933,7 +933,7 @@ const TradeChat = () => {
                   {isTradeApproved ? (
                     <Image
                       source={img.tradeSuccessful}
-                      style={{ width: 70, height: 71 }}
+                      style={{ width: 65, height: 66 }}
                       resizeMode="contain"
                     />
                   ) : (
@@ -946,7 +946,7 @@ const TradeChat = () => {
                       fontSize: 14,
                       lineHeight: 18.2, // 130% line-height (14 * 1.3)
                       letterSpacing: 0,
-                      marginLeft: isTradeApproved ? -20 : 10,
+                      marginLeft: isTradeApproved ? -5 : 10,
                       color: isDark ? "#FFFFFF" : "#111111",
                       flexShrink: 0,
                       paddingRight: 2,
