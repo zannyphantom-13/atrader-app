@@ -9,7 +9,6 @@ import { useChatList } from "@/hooks/useChatList";
 import { createTradeChat, markChatReadByUser } from "@/lib/firebase-chat-service";
 import { openChat } from "@/lib/zoho-service";
 import { useAppSelector } from "@/redux/store";
-import app_colors from "@/styles/color";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
@@ -123,33 +122,56 @@ const SupportChatScreen = () => {
       : `Trade Support ~ ${item.cardName || "Gift Card"}`;
 
     const isUnread = (item.unreadByUser || 0) > 0;
+    const unreadCount = item.unreadByUser || 0;
+    const formattedCount = unreadCount > 99 ? "99+" : `${unreadCount}`;
 
     return (
       <Pressable
         onPress={() => handleOpenChat(item.chatId, item.cardName, item.tradeId)}
-        className="flex-row items-center px-5 py-4"
         style={{
-          borderBottomWidth: 0.5,
-          borderBottomColor: isDark ? "#1a1a1a" : "#F3F4F6",
+          flexDirection: "row",
+          alignItems: "center",
+          minHeight: 66,
+          paddingHorizontal: 20,
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: isDark ? "#232323" : "#EFEFEF",
         }}
       >
-        {/* Avatar */}
-        <View className="relative mr-3">
+        {/* Avatar (36x36px circle) */}
+        <View style={{ width: 36, height: 36, marginRight: 12, position: "relative" }}>
           {isAppSupport ? (
             <View
-              className="w-11 h-11 items-center justify-center rounded-full border border-[#E5E7EB] dark:border-[#333333] overflow-hidden bg-white dark:bg-[#111111]"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                borderWidth: 0.5,
+                borderColor: isDark ? "#333333" : "#E5E7EB",
+                backgroundColor: isDark ? "#111111" : "#FFFFFF",
+              }}
             >
               <Image
                 source={isDark ? img.logoDarkPng : img.logolightPng}
-                style={{
-                  width: 32,
-                  height: 32,
-                }}
+                style={{ width: 24, height: 26 }}
                 resizeMode="contain"
               />
             </View>
           ) : item.cardImage ? (
-            <View className="w-11 h-11 rounded-full bg-[#E5E7EB] dark:bg-[#232323] items-center justify-center overflow-hidden">
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: isDark ? "#232323" : "#E5E7EB",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+              }}
+            >
               <Image
                 key={item.cardImage}
                 source={
@@ -157,109 +179,187 @@ const SupportChatScreen = () => {
                     ? { uri: item.cardImage }
                     : undefined
                 }
-                style={{ width: 44, height: 44 }}
+                style={{ width: 36, height: 36 }}
+                resizeMode="cover"
               />
             </View>
           ) : (
-            <View className="w-11 h-11 rounded-full items-center justify-center">
-              <Image source={img.logoGreen} style={{ width: 32, height: 32 }} resizeMode="contain" />
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: isDark ? "#111111" : "#F3F4F6",
+              }}
+            >
+              <Image source={img.logoGreen} style={{ width: 24, height: 26 }} resizeMode="contain" />
             </View>
           )}
 
           {/* Online indicator */}
           {item.chatStatus === "open" && item.assignedAgent && (
             <View
-              className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2"
               style={{
-                backgroundColor: "#22C55E",
+                position: "absolute",
+                bottom: -1,
+                right: -1,
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                borderWidth: 1.5,
+                backgroundColor: "#28A712",
                 borderColor: isDark ? "#0C0C0C" : "#FFFFFF",
               }}
             />
           )}
         </View>
 
-        {/* Chat Info */}
-        <View className="flex-1 mr-2">
-          <ThemedText
-            family="primary"
-            weight={isUnread ? "bold" : "semibold"}
-            className="text-[14px]"
-            numberOfLines={1}
-          >
-            {title}
-          </ThemedText>
-          <ThemedText
-            family="secondary"
-            weight="medium"
-            className={`text-[13px] mt-1 ${isUnread ? "text-text-primary-light dark:text-text-primary-dark" : "!text-[#4B5563] dark:!text-[#9CA3AF]"}`}
-            numberOfLines={1}
-          >
-            {item.lastMessage || "No messages yet"}
-          </ThemedText>
-        </View>
-
-        {/* Timestamp + Unread */}
-        <View className="items-end justify-center">
-          <ThemedText
-            family="secondary"
-            variant={isUnread ? "primary" : "secondary"}
-            className={`text-[11px] mb-1 ${isUnread ? "!text-[#22C55E]" : ""}`}
-          >
-            {formatTimestamp(item.lastMessageAt)}
-          </ThemedText>
-          {isUnread && (
-            <View
+        {/* Content Column */}
+        <View style={{ flex: 1 }}>
+          {/* Header row: Title + Timestamp */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <ThemedText
+              family="primary"
+              weight={isUnread ? "bold" : "semibold"}
               style={{
-                minWidth: 20,
-                height: 20,
-                paddingHorizontal: 6,
-                borderRadius: 10,
-                backgroundColor: "#22C55E",
-                alignItems: "center",
-                justifyContent: "center",
+                fontSize: 14,
+                lineHeight: 19.2,
+                color: isDark ? "#FFFFFF" : "#0C0C0C",
+                flex: 1,
+                marginRight: 8,
+              }}
+              numberOfLines={1}
+            >
+              {title}
+            </ThemedText>
+            <ThemedText
+              family="primary"
+              weight={isUnread ? "medium" : "regular"}
+              style={{
+                fontSize: 12,
+                lineHeight: 14.4,
+                letterSpacing: -0.165,
+                color: isUnread
+                  ? "#28A712"
+                  : (isDark ? "#B5B5B5" : "#71717A"),
               }}
             >
-              <ThemedText className="text-[10px] !text-white" weight="bold">
-                {item.unreadByUser > 99 ? "99+" : item.unreadByUser}
-              </ThemedText>
-            </View>
-          )}
+              {formatTimestamp(item.lastMessageAt)}
+            </ThemedText>
+          </View>
+
+          {/* Bottom row: Preview + Unread Badge */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+            <ThemedText
+              family="primary"
+              weight={isUnread ? "medium" : "regular"}
+              style={{
+                fontSize: 12,
+                lineHeight: 14.4,
+                letterSpacing: -0.165,
+                color: isUnread
+                  ? (isDark ? "#F1F3F4" : "#1F2326")
+                  : (isDark ? "#B5B5B5" : "#71717A"),
+                flex: 1,
+                marginRight: 8,
+              }}
+              numberOfLines={1}
+            >
+              {item.lastMessage || "No messages yet"}
+            </ThemedText>
+
+            {isUnread && (
+              <View
+                style={{
+                  minWidth: 20,
+                  height: 20,
+                  paddingHorizontal: 6,
+                  borderRadius: 10,
+                  backgroundColor: "#28A712",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <ThemedText
+                  family="primary"
+                  weight="bold"
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 16,
+                    color: "#FFFFFF",
+                    textAlign: "center",
+                  }}
+                >
+                  {formattedCount}
+                </ThemedText>
+              </View>
+            )}
+          </View>
         </View>
       </Pressable>
     );
   };
 
-  // Static App Support item at the top
+  // Static App Support item at the top (Figma Frame 167 Row 0)
   const renderHeader = () => (
     <Pressable
       onPress={() => openChat("App Support")}
-      className="flex-row items-center px-5 py-4"
       style={{
-        borderBottomWidth: 0.5,
-        borderBottomColor: isDark ? "#1a1a1a" : "#F3F4F6",
+        flexDirection: "row",
+        alignItems: "center",
+        minHeight: 66,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: isDark ? "#232323" : "#EFEFEF",
       }}
     >
       <View
-        className="w-11 h-11 items-center justify-center mr-3 rounded-full border border-[#E5E7EB] dark:border-[#333333] overflow-hidden bg-white dark:bg-[#111111]"
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          alignItems: "center",
+          justifyContent: "center",
+          marginRight: 12,
+          overflow: "hidden",
+          borderWidth: 0.5,
+          borderColor: isDark ? "#333333" : "#E5E7EB",
+          backgroundColor: isDark ? "#111111" : "#FFFFFF",
+        }}
       >
         <Image
           source={isDark ? img.logoDarkPng : img.logolightPng}
-          style={{
-            width: 32,
-            height: 32,
-          }}
+          style={{ width: 24, height: 26 }}
           resizeMode="contain"
         />
       </View>
-      <View className="flex-1">
-        <ThemedText family="primary" weight="bold" className="text-[14px]">
-          App Support
-        </ThemedText>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <ThemedText
+            family="primary"
+            weight="semibold"
+            style={{
+              fontSize: 14,
+              lineHeight: 19.2,
+              color: isDark ? "#FFFFFF" : "#0C0C0C",
+            }}
+          >
+            App Support
+          </ThemedText>
+        </View>
         <ThemedText
-          family="secondary"
-          variant="secondary"
+          family="primary"
           weight="regular"
-          className="text-b3 mt-0.5"
+          style={{
+            fontSize: 12,
+            lineHeight: 14.4,
+            letterSpacing: -0.165,
+            color: isDark ? "#B5B5B5" : "#71717A",
+            marginTop: 6,
+          }}
           numberOfLines={1}
         >
           Chat with us for general help
@@ -270,10 +370,19 @@ const SupportChatScreen = () => {
 
   return (
     <ThemedView className="flex-1">
-      <SafeAreaView edges={["top"]} className="flex-1 bg-background-light dark:bg-background-dark">
-        {/* Title */}
-        <View className="px-5 pt-4 pb-3">
-          <ThemedText family="primary" weight="semibold" className="text-[18px]">
+      <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: isDark ? "#0C0C0C" : "#FFFFFF" }}>
+        {/* Title: 22px Mona Sans SemiBold per Figma Frame 167 */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}>
+          <ThemedText
+            family="primary"
+            weight="semibold"
+            style={{
+              fontSize: 22,
+              lineHeight: 26.4,
+              letterSpacing: -0.165,
+              color: isDark ? "#FFFFFF" : "#0C0C0C",
+            }}
+          >
             Support Chat
           </ThemedText>
         </View>
@@ -296,7 +405,16 @@ const SupportChatScreen = () => {
             ListEmptyComponent={() => (
               <View className="items-center justify-center py-20">
                 <MessageSquare size={48} color={isDark ? "#333" : "#D1D5DB"} />
-                <ThemedText variant="secondary" className="text-b2 mt-4 text-center">
+                <ThemedText
+                  family="primary"
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 19.6,
+                    color: isDark ? "#B5B5B5" : "#71717A",
+                    marginTop: 16,
+                    textAlign: "center",
+                  }}
+                >
                   No trade chats yet.{"\n"}Start a trade to begin chatting!
                 </ThemedText>
               </View>
@@ -304,14 +422,23 @@ const SupportChatScreen = () => {
           />
         )}
 
-        {/* FAB - Chat us here */}
+        {/* FAB - Chat us here (Figma: width 131, height 40, radius 10, bg #28A712, gap 6, font 14 medium) */}
         <Pressable
           onPress={() => setShowChatTypeModal(true)}
-          className="absolute right-5 flex-row items-center px-2 py-2 rounded-[10px] shadow-lg"
           style={{
-            bottom: 20,
-            backgroundColor: app_colors.green[500],
-            shadowColor: app_colors.green[500],
+            position: "absolute",
+            right: 20,
+            bottom: 24,
+            width: 131,
+            height: 40,
+            borderRadius: 10,
+            backgroundColor: "#28A712",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 9,
+            paddingVertical: 8,
+            shadowColor: "#28A712",
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 8,
@@ -319,7 +446,17 @@ const SupportChatScreen = () => {
           }}
         >
           <img.chatr width={20} height={20} />
-          <ThemedText family="primary" weight="bold" className="text-[14px] !text-white ml-2">
+          <ThemedText
+            family="primary"
+            weight="medium"
+            style={{
+              fontSize: 14,
+              lineHeight: 16.8,
+              letterSpacing: -0.165,
+              color: "#FFFFFF",
+              marginLeft: 6,
+            }}
+          >
             Chat us here
           </ThemedText>
         </Pressable>
