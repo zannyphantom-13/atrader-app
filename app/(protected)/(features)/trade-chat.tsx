@@ -65,6 +65,23 @@ if (isKeyboardControllerLinked) {
   }
 }
 
+const isSystemMessage = (m: { senderType?: string; type?: string; text?: string }) => {
+  if (m.senderType === "user") return false;
+  if (m.senderType === "system" || m.type === "status_update") return true;
+  const text = m.text?.toLowerCase().trim() || "";
+  if (!text) return false;
+  return (
+    text.includes("trade has been approved") ||
+    text.includes("funds would be sent soon") ||
+    text.includes("chat has been closed") ||
+    text.includes("trade has been rejected") ||
+    text.includes("trade approved") ||
+    text.includes("trade rejected") ||
+    text.includes("chat closed") ||
+    text.startsWith("reason:")
+  );
+};
+
 const TradeChat = () => {
   const router = useRouter();
   const { isDark } = useTheme();
@@ -243,19 +260,21 @@ const TradeChat = () => {
   // Check system messages for approval or rejection in case document state lagged
   const hasApprovedMessage = messages?.some(
     (m) =>
-      m.senderType === "system" &&
+      isSystemMessage(m) &&
       (m.text?.toLowerCase().includes("trade has been approved") ||
-        m.text?.toLowerCase().includes("funds would be sent soon"))
+        m.text?.toLowerCase().includes("funds would be sent soon") ||
+        m.text?.toLowerCase().includes("trade approved"))
   );
 
   const hasRejectedMessage = messages?.some(
     (m) =>
-      m.senderType === "system" &&
-      m.text?.toLowerCase().includes("trade has been rejected")
+      isSystemMessage(m) &&
+      (m.text?.toLowerCase().includes("trade has been rejected") ||
+        m.text?.toLowerCase().includes("trade rejected"))
   );
 
   const messageRejectReason = messages
-    ?.filter((m) => m.senderType === "system" && m.text?.toLowerCase().includes("reason:"))
+    ?.filter((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("reason:"))
     ?.slice(-1)[0]
     ?.text?.split(/reason:\s*/i)[1]
     ?.trim();
@@ -304,7 +323,8 @@ const TradeChat = () => {
   // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved
   const isChatClosed =
     chatInfo?.chatStatus === "closed" ||
-    (chatInfo as any)?.status === "closed";
+    (chatInfo as any)?.status === "closed" ||
+    Boolean(messages?.some((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been closed")));
 
   const rejectionReason =
     chatInfo?.rejectReason ||
@@ -411,7 +431,7 @@ const TradeChat = () => {
   };
 
   const renderMessage = ({ item }: { item: MessageDocument }) => {
-    const isSystem = item.senderType === "system";
+    const isSystem = isSystemMessage(item);
     const isUser = item.senderType === "user";
 
     if (isSystem) {
@@ -420,11 +440,11 @@ const TradeChat = () => {
         <View style={{ width: "100%", marginBottom: 8, paddingHorizontal: 20, alignItems: "center" }}>
           <View
             style={{
-              backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)",
-              borderRadius: 100,
-              paddingHorizontal: 12,
-              paddingVertical: 5,
-              maxWidth: 295,
+              backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+              borderRadius: 16,
+              paddingHorizontal: 14,
+              paddingVertical: 6,
+              maxWidth: 335,
             }}
           >
             <ThemedText
@@ -821,12 +841,13 @@ const TradeChat = () => {
                     height: 35,
                     borderRadius: 100,
                     paddingVertical: 6,
-                    paddingHorizontal: 14,
+                    paddingHorizontal: 16,
                     backgroundColor: statusBgColor,
                     borderWidth: 1,
                     borderColor: statusBorderColor,
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
                   <ThemedText
@@ -836,9 +857,11 @@ const TradeChat = () => {
                       fontSize: 14,
                       lineHeight: 22.4,
                       color: statusColor,
+                      flexShrink: 0,
+                      paddingRight: 2,
                     }}
                   >
-                    {displayStatusText}
+                    {`${displayStatusText} `}
                   </ThemedText>
                 </View>
               </View>
@@ -925,9 +948,11 @@ const TradeChat = () => {
                       letterSpacing: 0,
                       marginLeft: 10,
                       color: isDark ? "#FFFFFF" : "#111111",
+                      flexShrink: 0,
+                      paddingRight: 2,
                     }}
                   >
-                    {isTradeApproved ? "Trade successful" : "Trade rejected"}
+                    {isTradeApproved ? "Trade successful " : "Trade rejected "}
                   </ThemedText>
                 </View>
 
