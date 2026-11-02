@@ -956,38 +956,7 @@ const TradeChat = () => {
             }}
           >
             <View className="px-5">
-              {isChatClosed ? (
-                <View className="py-4 items-center">
-                  <ThemedText family="secondary" variant="secondary" className="mb-3 text-center">
-                    This chat has been closed.
-                  </ThemedText>
-                  {/* Commented out Reopen Chat button as requested */}
-                  {/*
-                  <Pressable
-                    onPress={handleReopenChat}
-                    disabled={isReopeningChat}
-                    className="px-6 py-2.5 rounded-full items-center justify-center flex-row bg-green-500"
-                  >
-                    {isReopeningChat ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <ThemedText family="primary" weight="bold" className="text-white text-[14px]">
-                        Reopen Chat
-                      </ThemedText>
-                    )}
-                  </Pressable>
-                  */}
-                  <Pressable
-                    onPress={handleContactSupport}
-                    className="px-6 py-2.5 rounded-full items-center justify-center flex-row bg-primary-500"
-                  >
-                    <ThemedText family="primary" weight="bold" className="text-white text-[14px]">
-                      Contact Support
-                    </ThemedText>
-                  </Pressable>
-                </View>
-              ) : (
-                <View className="flex-row items-center gap-2">
+              <View className="flex-row items-center gap-2">
                   <View
                     style={{
                       flex: 1,
@@ -1057,8 +1026,7 @@ const TradeChat = () => {
                       Send
                     </ThemedText>
                   </Pressable>
-                </View>
-              )}
+              </View>
             </View>
           </View>
         </Animated.View>
