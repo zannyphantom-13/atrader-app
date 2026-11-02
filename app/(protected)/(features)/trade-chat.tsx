@@ -414,46 +414,163 @@ const TradeChat = () => {
     const isSystem = item.senderType === "system";
     const isUser = item.senderType === "user";
 
-    if (isSystem || !isUser) {
-      // Support / Agent Message (aligned to LEFT)
+    if (isSystem) {
+      // System Message (centered notification)
       return (
-        <View style={{ width: "100%", marginBottom: 8, paddingLeft: 20, paddingRight: 80 }}>
-          <View style={{ alignItems: "flex-start" }}>
-          {/* Header with avatar + name */}
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-            <View
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                overflow: "hidden",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 8,
-                borderWidth: 0.5,
-                borderColor: isDark ? "#333333" : "#E6E6E6",
-                backgroundColor: isDark ? "#111111" : "#FFFFFF",
-              }}
-            >
-              <Image
-                source={isDark ? img.logoDarkPng : img.logolightPng}
-                style={{ width: 16, height: 16 }}
-                resizeMode="contain"
-              />
-            </View>
+        <View style={{ width: "100%", marginBottom: 8, paddingHorizontal: 20, alignItems: "center" }}>
+          <View
+            style={{
+              backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)",
+              borderRadius: 100,
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              maxWidth: 295,
+            }}
+          >
             <ThemedText
               family="primary"
               weight="medium"
               style={{
                 fontSize: 12,
                 lineHeight: 15.6,
-                color: isDark ? "#FFFFFF" : "#4A4A4A",
+                letterSpacing: -0.17,
+                textAlign: "center",
+                color: isDark ? "#B5B5B5" : "#71717A",
               }}
             >
-              ATrader customer support
+              {item.text}
             </ThemedText>
           </View>
+        </View>
+      );
+    }
 
+    if (!isUser) {
+      // Support / Agent Message (aligned to LEFT)
+      return (
+        <View style={{ width: "100%", marginBottom: 8, paddingLeft: 20, paddingRight: 80 }}>
+          <View style={{ alignItems: "flex-start" }}>
+            {/* Header with avatar + name */}
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+              <View
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 8,
+                  borderWidth: 0.5,
+                  borderColor: isDark ? "#333333" : "#E6E6E6",
+                  backgroundColor: isDark ? "#111111" : "#FFFFFF",
+                }}
+              >
+                <Image
+                  source={isDark ? img.logoDarkPng : img.logolightPng}
+                  style={{ width: 16, height: 16 }}
+                  resizeMode="contain"
+                />
+              </View>
+              <ThemedText
+                family="primary"
+                weight="medium"
+                style={{
+                  fontSize: 12,
+                  lineHeight: 15.6,
+                  color: isDark ? "#FFFFFF" : "#4A4A4A",
+                }}
+              >
+                ATrader customer support
+              </ThemedText>
+            </View>
+
+            {/* Bubble */}
+            {item.type === "image" && item.imageUrl ? (
+              <Pressable
+                onPress={() => handleImagePress(item.id!)}
+                style={{
+                  width: 295,
+                  height: 190,
+                  borderRadius: 12,
+                  borderTopLeftRadius: 0,
+                  overflow: "hidden",
+                }}
+              >
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="cover"
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 6,
+                    right: 8,
+                    backgroundColor: "rgba(0,0,0,0.55)",
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                  }}
+                >
+                  <ThemedText
+                    family="primary"
+                    weight="medium"
+                    style={{ fontSize: 10, lineHeight: 14, color: "#FFFFFF" }}
+                  >
+                    {formatTime(item.createdAt)}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            ) : (
+              <View
+                style={{
+                  maxWidth: 295,
+                  paddingTop: 12,
+                  paddingHorizontal: 12,
+                  paddingBottom: 6,
+                  borderRadius: 12,
+                  borderTopLeftRadius: 0,
+                  backgroundColor: isDark ? "#111111" : "#F8F8F8",
+                  borderWidth: isDark ? 0.5 : 0,
+                  borderColor: "#232323",
+                }}
+              >
+                <ThemedText
+                  family="primary"
+                  weight="medium"
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 18.2,
+                    color: isDark ? "#FFFFFF" : "#0D121C",
+                  }}
+                >
+                  {item.text}
+                </ThemedText>
+                <ThemedText
+                  family="primary"
+                  weight="medium"
+                  style={{
+                    fontSize: 10,
+                    lineHeight: 19.2,
+                    color: "#B5B5B5",
+                    marginTop: 4,
+                    textAlign: "left",
+                  }}
+                >
+                  {formatTime(item.createdAt)}
+                </ThemedText>
+              </View>
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    // User Message (aligned to RIGHT)
+    return (
+      <View style={{ width: "100%", marginBottom: 8, paddingLeft: 80, paddingRight: 20 }}>
+        <View style={{ alignItems: "flex-end" }}>
           {/* Bubble */}
           {item.type === "image" && item.imageUrl ? (
             <Pressable
@@ -462,7 +579,7 @@ const TradeChat = () => {
                 width: 295,
                 height: 190,
                 borderRadius: 12,
-                borderTopLeftRadius: 0,
+                borderBottomRightRadius: 0,
                 overflow: "hidden",
               }}
             >
@@ -499,10 +616,8 @@ const TradeChat = () => {
                 paddingHorizontal: 12,
                 paddingBottom: 6,
                 borderRadius: 12,
-                borderTopLeftRadius: 0,
-                backgroundColor: isDark ? "#111111" : "#F8F8F8",
-                borderWidth: isDark ? 0.5 : 0,
-                borderColor: "#232323",
+                borderBottomRightRadius: 0,
+                backgroundColor: isDark ? "#0B2E02" : "#E8FFE4",
               }}
             >
               <ThemedText
@@ -522,147 +637,63 @@ const TradeChat = () => {
                 style={{
                   fontSize: 10,
                   lineHeight: 19.2,
-                  color: "#B5B5B5",
+                  color: isDark ? "#B5B5B5" : "#71717A",
                   marginTop: 4,
-                  textAlign: "left",
+                  textAlign: "right",
                 }}
               >
                 {formatTime(item.createdAt)}
               </ThemedText>
             </View>
           )}
-          </View>
-        </View>
-      );
-    }
 
-    // User Message (aligned to RIGHT)
-    return (
-      <View style={{ width: "100%", marginBottom: 8, paddingLeft: 80, paddingRight: 20 }}>
-        <View style={{ alignItems: "flex-end" }}>
-        {/* Bubble */}
-        {item.type === "image" && item.imageUrl ? (
-          <Pressable
-            onPress={() => handleImagePress(item.id!)}
-            style={{
-              width: 295,
-              height: 190,
-              borderRadius: 12,
-              borderBottomRightRadius: 0,
-              overflow: "hidden",
-            }}
-          >
-            <Image
-              source={{ uri: item.imageUrl }}
-              style={{ width: "100%", height: "100%" }}
-              resizeMode="cover"
-            />
+          {/* User name + avatar under the message */}
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+            <ThemedText
+              family="primary"
+              weight="medium"
+              style={{
+                fontSize: 12,
+                lineHeight: 15.6,
+                color: isDark ? "#FFFFFF" : "#4A4A4A",
+                marginRight: 8,
+              }}
+            >
+              {item.senderName}
+            </ThemedText>
             <View
               style={{
-                position: "absolute",
-                bottom: 6,
-                right: 8,
-                backgroundColor: "rgba(0,0,0,0.55)",
-                paddingHorizontal: 6,
-                paddingVertical: 2,
-                borderRadius: 6,
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                overflow: "hidden",
+                borderWidth: 0.5,
+                borderColor: isDark ? "#333333" : "#E6E6E6",
+                backgroundColor: "#E5E7EB",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              <ThemedText
-                family="primary"
-                weight="medium"
-                style={{ fontSize: 10, lineHeight: 14, color: "#FFFFFF" }}
-              >
-                {formatTime(item.createdAt)}
-              </ThemedText>
+              {item.senderAvatar ? (
+                <Image source={{ uri: item.senderAvatar }} style={{ width: 24, height: 24 }} />
+              ) : (
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: "#BFDBFE",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ThemedText style={{ fontSize: 10, fontWeight: "bold", color: "#1E40AF" }}>
+                    {(item.senderName || "U").charAt(0).toUpperCase()}
+                  </ThemedText>
+                </View>
+              )}
             </View>
-          </Pressable>
-        ) : (
-          <View
-            style={{
-              maxWidth: 295,
-              paddingTop: 12,
-              paddingHorizontal: 12,
-              paddingBottom: 6,
-              borderRadius: 12,
-              borderBottomRightRadius: 0,
-              backgroundColor: isDark ? "#0B2E02" : "#E8FFE4",
-            }}
-          >
-            <ThemedText
-              family="primary"
-              weight="medium"
-              style={{
-                fontSize: 14,
-                lineHeight: 18.2,
-                color: isDark ? "#FFFFFF" : "#0D121C",
-              }}
-            >
-              {item.text}
-            </ThemedText>
-            <ThemedText
-              family="primary"
-              weight="medium"
-              style={{
-                fontSize: 10,
-                lineHeight: 19.2,
-                color: isDark ? "#B5B5B5" : "#71717A",
-                marginTop: 4,
-                textAlign: "right",
-              }}
-            >
-              {formatTime(item.createdAt)}
-            </ThemedText>
           </View>
-        )}
-
-        {/* User name + avatar under the message */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
-          <ThemedText
-            family="primary"
-            weight="medium"
-            style={{
-              fontSize: 12,
-              lineHeight: 15.6,
-              color: isDark ? "#FFFFFF" : "#4A4A4A",
-              marginRight: 8,
-            }}
-          >
-            {item.senderName}
-          </ThemedText>
-          <View
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              overflow: "hidden",
-              borderWidth: 0.5,
-              borderColor: isDark ? "#333333" : "#E6E6E6",
-              backgroundColor: "#E5E7EB",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {item.senderAvatar ? (
-              <Image source={{ uri: item.senderAvatar }} style={{ width: 24, height: 24 }} />
-            ) : (
-              <View
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 12,
-                  backgroundColor: "#BFDBFE",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ThemedText style={{ fontSize: 10, fontWeight: "bold", color: "#1E40AF" }}>
-                  {(item.senderName || "U").charAt(0).toUpperCase()}
-                </ThemedText>
-              </View>
-            )}
-          </View>
-        </View>
         </View>
       </View>
     );
@@ -787,11 +818,10 @@ const TradeChat = () => {
                 {/* Status Badge */}
                 <View
                   style={{
-                    width: isTradeApproved ? 96 : isTradeRejected ? 82 : 88,
                     height: 35,
                     borderRadius: 100,
                     paddingVertical: 6,
-                    paddingHorizontal: 12,
+                    paddingHorizontal: 14,
                     backgroundColor: statusBgColor,
                     borderWidth: 1,
                     borderColor: statusBorderColor,
@@ -893,7 +923,7 @@ const TradeChat = () => {
                       fontSize: 14,
                       lineHeight: 18.2, // 130% line-height (14 * 1.3)
                       letterSpacing: 0,
-                      marginLeft: -1,
+                      marginLeft: 10,
                       color: isDark ? "#FFFFFF" : "#111111",
                     }}
                   >
@@ -957,75 +987,75 @@ const TradeChat = () => {
           >
             <View className="px-5">
               <View className="flex-row items-center gap-2">
-                  <View
+                <View
+                  style={{
+                    flex: 1,
+                    height: 46,
+                    borderRadius: 20,
+                    paddingHorizontal: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: isDark ? "#0C0C0C" : "#FCFCFC",
+                    borderWidth: 1,
+                    borderColor: isDark ? "#232323" : "#EFEFEF",
+                  }}
+                >
+                  <TextInput
+                    value={inputText}
+                    onChangeText={setInputText}
+                    placeholder="Describe your issues"
+                    placeholderTextColor={isDark ? "#B5B5B5" : "#4A4A4A"}
+                    editable={true}
+                    className="flex-1 text-[14px] h-full"
                     style={{
-                      flex: 1,
-                      height: 46,
-                      borderRadius: 20,
-                      paddingHorizontal: 14,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: isDark ? "#0C0C0C" : "#FCFCFC",
-                      borderWidth: 1,
-                      borderColor: isDark ? "#232323" : "#EFEFEF",
+                      color: isDark ? "#FFFFFF" : "#0C0C0C",
+                      fontSize: 14,
                     }}
-                  >
-                    <TextInput
-                      value={inputText}
-                      onChangeText={setInputText}
-                      placeholder="Describe your issues"
-                      placeholderTextColor={isDark ? "#B5B5B5" : "#4A4A4A"}
-                      editable={true}
-                      className="flex-1 text-[14px] h-full"
-                      style={{
-                        color: isDark ? "#FFFFFF" : "#0C0C0C",
-                        fontSize: 14,
-                      }}
-                      multiline={false}
-                      returnKeyType="send"
-                      onSubmitEditing={handleSend}
-                    />
-                    <Pressable
-                      onPress={handlePickImage}
-                      disabled={isUploading}
-                      className="ml-2"
-                    >
-                      {isUploading ? (
-                        <ActivityIndicator size="small" color="#28A712" />
-                      ) : (
-                        <ImagePlus size={20} color={isDark ? "#B5B5B5" : "#4A4A4A"} />
-                      )}
-                    </Pressable>
-                  </View>
-
+                    multiline={false}
+                    returnKeyType="send"
+                    onSubmitEditing={handleSend}
+                  />
                   <Pressable
-                    onPress={handleSend}
-                    disabled={!inputText.trim() || isSending}
+                    onPress={handlePickImage}
+                    disabled={isUploading}
+                    className="ml-2"
+                  >
+                    {isUploading ? (
+                      <ActivityIndicator size="small" color="#28A712" />
+                    ) : (
+                      <ImagePlus size={20} color={isDark ? "#B5B5B5" : "#4A4A4A"} />
+                    )}
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  onPress={handleSend}
+                  disabled={!inputText.trim() || isSending}
+                  style={{
+                    width: 68,
+                    height: 46,
+                    borderRadius: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: !inputText.trim()
+                      ? (isDark ? "#4A4A4A" : "#B5B5B5")
+                      : (isDark ? "#28A712" : "#28A712"),
+                  }}
+                >
+                  <ThemedText
+                    family="primary"
+                    weight="medium"
                     style={{
-                      width: 68,
-                      height: 46,
-                      borderRadius: 20,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: !inputText.trim()
-                        ? (isDark ? "#4A4A4A" : "#B5B5B5")
-                        : (isDark ? "#28A712" : "#28A712"),
+                      fontSize: 14,
+                      lineHeight: 16.8,
+                      color: !inputText.trim()
+                        ? (isDark ? "#CECECE" : "#FFFFFF")
+                        : "#FFFFFF",
                     }}
                   >
-                    <ThemedText
-                      family="primary"
-                      weight="medium"
-                      style={{
-                        fontSize: 14,
-                        lineHeight: 16.8,
-                        color: !inputText.trim()
-                          ? (isDark ? "#CECECE" : "#FFFFFF")
-                          : "#FFFFFF",
-                      }}
-                    >
-                      Send
-                    </ThemedText>
-                  </Pressable>
+                    Send
+                  </ThemedText>
+                </Pressable>
               </View>
             </View>
           </View>
