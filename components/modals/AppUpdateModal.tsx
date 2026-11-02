@@ -214,3 +214,4 @@ export const AppUpdateModal: React.FC = () => {
     </Modal>
   );
 };
+

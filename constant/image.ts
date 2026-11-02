@@ -130,6 +130,8 @@ import whatsappDark from "@/assets/v1/whatsapp-dark.svg";
 import whatsappLight from "@/assets/v1/whatsapp-light.svg";
 import giftReward from "@/assets/v1/gift-reward.svg";
 import giftRewardDark from "@/assets/v1/gift-reward-dark.svg";
+import tradeRejected from "@/assets/images/trade-rejected.svg";
+const tradeSuccessful = require("@/assets/images/trade_successful_icon.png");
 
 const chatBg = require("@/assets/images/chat-bg.png");
 const chatDarkBg = require("@/assets/images/chat-dark-bg.png");
@@ -309,6 +311,8 @@ export const img = {
   // new
   giftReward,
   giftRewardDark,
+  tradeRejected,
+  tradeSuccessful,
   // New Avatars
 
   avatarLady1,

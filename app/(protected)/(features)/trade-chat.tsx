@@ -19,7 +19,8 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
-import { ArrowLeft, CheckCircle2, ChevronDown, ImagePlus, X, XCircle } from "lucide-react-native";
+import { ArrowLeft, ChevronDown, ImagePlus, X } from "lucide-react-native";
+import TradeRejectedIcon from "@/assets/images/trade-rejected.svg";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -303,10 +304,7 @@ const TradeChat = () => {
   // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved
   const isChatClosed =
     chatInfo?.chatStatus === "closed" ||
-    (chatInfo as any)?.status === "closed" ||
-    (chatInfo as any)?.status === "reject" ||
-    isTradeApproved ||
-    isTradeRejected;
+    (chatInfo as any)?.status === "closed";
 
   const rejectionReason =
     chatInfo?.rejectReason ||
@@ -713,28 +711,30 @@ const TradeChat = () => {
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center flex-1 mr-2">
                   {isTradeApproved ? (
-                    <CheckCircle2 size={24} color="#22C55E" fill="#22C55E" />
+                    <Image
+                      source={img.tradeSuccessful}
+                      style={{ width: 32, height: 32 }}
+                      resizeMode="contain"
+                    />
                   ) : (
-                    <XCircle size={24} color="#EF4444" fill="#EF4444" />
+                    <TradeRejectedIcon width={32} height={32} />
                   )}
-                  <ThemedText family="primary" weight="bold" className="text-b2 ml-2">
-                    {isTradeApproved ? "Trade approved" : "Trade rejected"}
+                  <ThemedText family="primary" weight="bold" className="text-b2 ml-3">
+                    {isTradeApproved ? "Trade successful" : "Trade rejected"}
                   </ThemedText>
                 </View>
-                {!isChatClosed && (
-                  <Pressable
-                    onPress={handleEndChat}
-                    className="px-4 py-2 rounded-[12px] border"
-                    style={{
-                      borderColor: isDark ? "#333" : "#DDD",
-                      backgroundColor: isDark ? "#1A1A1A" : "#FFF",
-                    }}
-                  >
-                    <ThemedText family="primary" weight="medium" className="text-b3">
-                      End chat
-                    </ThemedText>
-                  </Pressable>
-                )}
+                <Pressable
+                  onPress={handleEndChat}
+                  className="px-4 py-2 rounded-[12px] border"
+                  style={{
+                    borderColor: isDark ? "#333" : "#DDD",
+                    backgroundColor: isDark ? "#1A1A1A" : "#FFF",
+                  }}
+                >
+                  <ThemedText family="primary" weight="medium" className="text-b3">
+                    End chat
+                  </ThemedText>
+                </Pressable>
               </View>
               {isTradeRejected && !!rejectionReason && (
                 <View className="mt-2.5 pt-2 border-t border-gray-100 dark:border-[#202020]">
