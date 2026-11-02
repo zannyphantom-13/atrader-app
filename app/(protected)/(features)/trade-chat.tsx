@@ -246,7 +246,12 @@ const TradeChat = () => {
     paddingBottom: Math.max(0, Math.abs(keyboardHeight.get()) - (Platform.OS === "android" ? insets.bottom - 10 : insets.bottom - 10)),
   }));
 
-  const isSupportChat = chatId?.startsWith("support_");
+  const isSupportChat =
+    Boolean(chatId?.startsWith("support_")) ||
+    params.isSupport === "true" ||
+    params.cardCategory === "Support" ||
+    chatInfo?.type === "support" ||
+    (!params.tradeId && !chatInfo?.tradeId);
   const agentDisplayName = chatInfo?.assignedAgentName || "Atrader customer support";
 
   // Normalize trade and chat status from real-time Firestore chatInfo and backend REST tradeData
@@ -321,10 +326,12 @@ const TradeChat = () => {
       : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
 
   // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved
+  // General app support should ALWAYS remain open!
   const isChatClosed =
-    chatInfo?.chatStatus === "closed" ||
-    (chatInfo as any)?.status === "closed" ||
-    Boolean(messages?.some((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been closed")));
+    !isSupportChat &&
+    (chatInfo?.chatStatus === "closed" ||
+      (chatInfo as any)?.status === "closed" ||
+      Boolean(messages?.some((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been closed"))));
 
   const rejectionReason =
     chatInfo?.rejectReason ||
@@ -371,8 +378,9 @@ const TradeChat = () => {
   }, [sendImage, isChatClosed]);
 
   const handleEndChat = useCallback(async () => {
+    if (isSupportChat) return; // General app support cannot be ended
     setShowEndChatModal(true);
-  }, []);
+  }, [isSupportChat]);
 
   const confirmEndChat = useCallback(async () => {
     setIsEndingChat(true);
@@ -747,7 +755,7 @@ const TradeChat = () => {
                   color: isDark ? "#E7E7E7" : "#0C0C0C",
                 }}
               >
-                {isSupportChat ? "Gift Card Support" : "Trade support"}
+                {isSupportChat ? "App Support" : "Trade support"}
               </ThemedText>
             </View>
           </SafeAreaView>

@@ -60,7 +60,7 @@ const SupportChatScreen = () => {
   const [showChatTypeModal, setShowChatTypeModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  // Navigate to trade chat
+  // Navigate to trade or support chat
   const handleOpenChat = useCallback(
     (chatId: string, cardName: string, tradeId: string | null) => {
       // Optimistic mark read
@@ -68,26 +68,27 @@ const SupportChatScreen = () => {
         console.warn("[SupportChat] markChatReadByUser failed:", err)
       );
 
+      const isSupport = !tradeId || chatId.startsWith("support_");
+
       router.push({
         pathname: "/(protected)/(features)/trade-chat" as any,
         params: {
           chatId: chatId,
           tradeId: tradeId || "",
           cardName,
-          cardCategory: "",
+          cardCategory: isSupport ? "Support" : "",
           type: "existing",
+          isSupport: isSupport ? "true" : "false",
         },
       });
     },
     [router]
   );
 
-  // Handle Gift Card Issues from modal
-  const handleGiftCardIssue = useCallback(async () => {
+  // Open General App Support (always open)
+  const handleOpenAppSupport = useCallback(async () => {
     if (!user) return;
-    setShowChatTypeModal(false);
     setIsCreating(true);
-
     try {
       const chatId = await createTradeChat({
         tradeId: "",
@@ -95,25 +96,32 @@ const SupportChatScreen = () => {
         userName: userInfo?.name || userInfo?.username || "User",
         userAvatar: userInfo?.profile_picture || null,
         userExpoPushToken: expoPushToken,
-        cardName: "",
+        cardName: "App Support",
         cardCategory: "Support",
         cardAmount: "",
         settlementAmount: "",
         chatType: "support",
       });
 
-      handleOpenChat(chatId, "General Support", null);
+      handleOpenChat(chatId, "App Support", null);
     } catch (error) {
-      console.error("Failed to create support chat:", error);
+      console.error("Failed to open App Support chat:", error);
     } finally {
       setIsCreating(false);
     }
   }, [user, expoPushToken, handleOpenChat, userInfo]);
 
-  // Handle App Support from modal -> open Zoho
-  const handleAppSupport = useCallback(() => {
-    openChat("App Support");
-  }, []);
+  // Handle Gift Card Issues from modal
+  const handleGiftCardIssue = useCallback(async () => {
+    setShowChatTypeModal(false);
+    await handleOpenAppSupport();
+  }, [handleOpenAppSupport]);
+
+  // Handle App Support from modal
+  const handleAppSupport = useCallback(async () => {
+    setShowChatTypeModal(false);
+    await handleOpenAppSupport();
+  }, [handleOpenAppSupport]);
 
   const renderChatItem = ({ item }: { item: any }) => {
     const isAppSupport = item.type === "support" && !item.tradeId;
@@ -302,10 +310,21 @@ const SupportChatScreen = () => {
     );
   };
 
-  // Static App Support item at the top (Figma Frame 167 Row 0)
+  const supportChat = chats.find(
+    (c: any) => c.type === "support" || c.chatId?.startsWith("support_")
+  );
+  const tradeChats = chats.filter(
+    (c: any) => c.type !== "support" && !c.chatId?.startsWith("support_")
+  );
+
+  const isSupportUnread = (supportChat?.unreadByUser || 0) > 0;
+  const supportUnreadCount = supportChat?.unreadByUser || 0;
+  const formattedSupportCount = supportUnreadCount > 99 ? "99+" : `${supportUnreadCount}`;
+
+  // Static App Support item at the top (Figma Frame 167 Row 0) - Always Open
   const renderHeader = () => (
     <Pressable
-      onPress={() => openChat("App Support")}
+      onPress={handleOpenAppSupport}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -340,7 +359,7 @@ const SupportChatScreen = () => {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <ThemedText
             family="primary"
-            weight="semibold"
+            weight={isSupportUnread ? "bold" : "semibold"}
             style={{
               fontSize: 14,
               lineHeight: 19.2,
@@ -349,21 +368,69 @@ const SupportChatScreen = () => {
           >
             App Support
           </ThemedText>
+          {supportChat?.lastMessageAt && (
+            <ThemedText
+              family="primary"
+              weight={isSupportUnread ? "medium" : "regular"}
+              style={{
+                fontSize: 12,
+                lineHeight: 14.4,
+                letterSpacing: -0.165,
+                color: isSupportUnread
+                  ? "#28A712"
+                  : (isDark ? "#B5B5B5" : "#71717A"),
+              }}
+            >
+              {formatTimestamp(supportChat.lastMessageAt)}
+            </ThemedText>
+          )}
         </View>
-        <ThemedText
-          family="primary"
-          weight="regular"
-          style={{
-            fontSize: 12,
-            lineHeight: 14.4,
-            letterSpacing: -0.165,
-            color: isDark ? "#B5B5B5" : "#71717A",
-            marginTop: 6,
-          }}
-          numberOfLines={1}
-        >
-          Chat with us for general help
-        </ThemedText>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+          <ThemedText
+            family="primary"
+            weight={isSupportUnread ? "medium" : "regular"}
+            style={{
+              fontSize: 12,
+              lineHeight: 14.4,
+              letterSpacing: -0.165,
+              color: isSupportUnread
+                ? (isDark ? "#F1F3F4" : "#1F2326")
+                : (isDark ? "#B5B5B5" : "#71717A"),
+              flex: 1,
+              marginRight: 8,
+            }}
+            numberOfLines={1}
+          >
+            {supportChat?.lastMessage || "Chat with us for general help"}
+          </ThemedText>
+
+          {isSupportUnread && (
+            <View
+              style={{
+                minWidth: 20,
+                height: 20,
+                paddingHorizontal: 6,
+                borderRadius: 10,
+                backgroundColor: "#28A712",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <ThemedText
+                family="primary"
+                weight="bold"
+                style={{
+                  fontSize: 12,
+                  lineHeight: 16,
+                  color: "#FFFFFF",
+                  textAlign: "center",
+                }}
+              >
+                {formattedSupportCount}
+              </ThemedText>
+            </View>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -396,7 +463,7 @@ const SupportChatScreen = () => {
           </View>
         ) : (
           <FlatList
-            data={chats}
+            data={tradeChats}
             renderItem={renderChatItem}
             keyExtractor={(item) => item.chatId}
             ListHeaderComponent={renderHeader}

@@ -111,6 +111,18 @@ export const createTradeChat = async (
     const existingChat = await getDoc(chatRef);
     if (existingChat.exists()) {
       console.log("[FirebaseChat] Chat already exists:", chatId);
+      // General app support should ALWAYS remain open
+      if (params.chatType === "support" || chatId.startsWith("support_")) {
+        try {
+          await updateDoc(chatRef, {
+            chatStatus: "open",
+            status: "open",
+            updatedAt: serverTimestamp(),
+          });
+        } catch (e) {
+          console.warn("[FirebaseChat] Failed to update support chatStatus to open:", e);
+        }
+      }
       return chatId;
     }
   } catch (error) {
@@ -420,6 +432,11 @@ export const updateChatPushToken = async (
  * Close a chat (user clicks "End chat")
  */
 export const closeChat = async (chatId: string): Promise<void> => {
+  // General app support can NEVER be closed
+  if (chatId.startsWith("support_")) {
+    console.log("[FirebaseChat] General app support cannot be closed.");
+    return;
+  }
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   await updateDoc(chatRef, {
     chatStatus: "closed",

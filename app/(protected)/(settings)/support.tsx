@@ -5,6 +5,9 @@ import { img } from "@/constant/image";
 import { useTheme } from "@/context/ThemeProvider";
 import { useToast } from "@/context/ToastProvider";
 import { openChat } from "@/lib/zoho-service";
+import { useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
+import { createTradeChat } from "@/lib/firebase-chat-service";
 import { useAppSelector } from "@/redux/store";
 import * as Clipboard from "expo-clipboard";
 import { ChevronRight } from "lucide-react-native";
@@ -93,6 +96,7 @@ const SocialCard: React.FC<SocialCardProps> = ({ title, handle, icon, onPress, o
 };
 
 const Support = () => {
+  const router = useRouter();
   const { isDark } = useTheme();
   const { user } = useAppSelector((state) => state.auth);
   const { user: userInfo, profile } = user || {};
@@ -154,9 +158,38 @@ const Support = () => {
         >
           {/* Support Options */}
           <Pressable
-            onPress={() => {
-              // console.log("Support: App Support button pressed");
-              openChat("App Support");
+            onPress={async () => {
+              try {
+                const uid = getAuth().currentUser?.uid || user?.id || "";
+                if (uid) {
+                  await createTradeChat({
+                    tradeId: "",
+                    userId: uid,
+                    userName: userInfo?.name || userInfo?.username || "User",
+                    userAvatar: userInfo?.profile_picture || null,
+                    cardName: "App Support",
+                    cardCategory: "Support",
+                    cardAmount: "",
+                    settlementAmount: "",
+                    chatType: "support",
+                  });
+                  router.push({
+                    pathname: "/(protected)/(features)/trade-chat" as any,
+                    params: {
+                      chatId: `support_${uid}`,
+                      tradeId: "",
+                      cardName: "App Support",
+                      cardCategory: "Support",
+                      type: "existing",
+                      isSupport: "true",
+                    },
+                  });
+                } else {
+                  openChat("App Support");
+                }
+              } catch (e) {
+                openChat("App Support");
+              }
             }}
             className="flex-row items-center justify-between p-3 bg-[#E8FFE433] dark:bg-[#171717] border border-[#28a712a7] dark:border-[#232323] rounded-[24px] mb-2"
           >
