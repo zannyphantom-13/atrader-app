@@ -136,6 +136,12 @@ const SupportChatScreen = () => {
     return (
       <Pressable
         onPress={() => handleOpenChat(item.chatId, item.cardName, item.tradeId)}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isUnread
+            ? `${title}, ${unreadCount} unread message${unreadCount > 1 ? "s" : ""}`
+            : title
+        }
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -324,6 +330,12 @@ const SupportChatScreen = () => {
   const renderHeader = () => (
     <Pressable
       onPress={handleOpenAppSupport}
+      accessibilityRole="button"
+      accessibilityLabel={
+        isSupportUnread
+          ? `App Support, ${supportUnreadCount} unread message${supportUnreadCount > 1 ? "s" : ""}`
+          : "App Support"
+      }
       style={{
         flexDirection: "row",
         alignItems: "center",

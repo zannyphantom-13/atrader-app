@@ -17,21 +17,35 @@ import {
   getChatUnreadCount,
   type ChatDocument,
 } from "@/lib/firebase-chat-service";
+import {
+  setGlobalActiveChatId,
+  getGlobalActiveChatId,
+  isViewingChat,
+  dismissChatNotification,
+} from "@/lib/chat-state";
 
-// Active chat ID tracker across the entire app
-let currentActiveChatId: string | null = null;
+// Re-export for convenience across the app
+export { setGlobalActiveChatId, getGlobalActiveChatId, isViewingChat };
 
-export const setGlobalActiveChatId = (id: string | null) => {
-  currentActiveChatId = id;
-};
-
-export const getGlobalActiveChatId = () => currentActiveChatId;
-
-interface BannerPayload {
+export interface BannerPayload {
   name: string;
   text: string;
-  chat: ChatDocument;
+  chat?: ChatDocument | null;
+  chatId?: string;
+  tradeId?: string | null;
+  cardName?: string;
+  cardCategory?: string;
+  isSupport?: boolean;
 }
+
+// Global programmatic banner trigger for notification listener
+let globalShowBanner: ((payload: BannerPayload) => void) | null = null;
+
+export const showInAppNotification = (payload: BannerPayload) => {
+  if (globalShowBanner) {
+    globalShowBanner(payload);
+  }
+};
 
 export const InAppNotificationBanner = () => {
   const router = useRouter();
@@ -57,9 +71,15 @@ export const InAppNotificationBanner = () => {
   }, [notifAnim]);
 
   const showBanner = useCallback(
-    (name: string, text: string, chat: ChatDocument) => {
+    (payload: BannerPayload) => {
+      // Do not display if user is actively viewing this conversation
+      const targetChatId = payload.chat?.chatId || payload.chatId;
+      if (isViewingChat(targetChatId)) {
+        return;
+      }
+
       if (notifTimer.current) clearTimeout(notifTimer.current);
-      setInAppNotif({ name, text, chat });
+      setInAppNotif(payload);
       Animated.spring(notifAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -78,25 +98,40 @@ export const InAppNotificationBanner = () => {
     [notifAnim]
   );
 
+  // Register global programmatic banner trigger
+  useEffect(() => {
+    globalShowBanner = showBanner;
+    return () => {
+      globalShowBanner = null;
+    };
+  }, [showBanner]);
+
   const handlePressBanner = useCallback(() => {
-    if (!inAppNotif?.chat) return;
-    const chat = inAppNotif.chat;
+    if (!inAppNotif) return;
+    const { chat, chatId, tradeId, cardName, cardCategory, isSupport } = inAppNotif;
     dismissBanner();
 
-    const isSupport =
-      chat.type === "support" ||
-      chat.chatId?.startsWith("support_") ||
-      !chat.tradeId;
+    const targetChatId = chat?.chatId || chatId;
+    if (!targetChatId) return;
+
+    const resolvedIsSupport =
+      isSupport ??
+      (chat?.type === "support" ||
+        targetChatId.startsWith("support_") ||
+        !chat?.tradeId);
+
+    const resolvedCardName =
+      cardName || chat?.cardName || (resolvedIsSupport ? "App Support" : "Gift Card");
 
     router.push({
       pathname: "/(protected)/(features)/trade-chat" as any,
       params: {
-        chatId: chat.chatId,
-        tradeId: chat.tradeId || "",
-        cardName: chat.cardName || (isSupport ? "App Support" : "Gift Card"),
-        cardCategory: isSupport ? "Support" : (chat.cardCategory || ""),
+        chatId: targetChatId,
+        tradeId: (tradeId ?? chat?.tradeId) || "",
+        cardName: resolvedCardName,
+        cardCategory: (cardCategory ?? chat?.cardCategory) || (resolvedIsSupport ? "Support" : ""),
         type: "existing",
-        isSupport: isSupport ? "true" : "false",
+        isSupport: resolvedIsSupport ? "true" : "false",
       },
     });
   }, [inAppNotif, dismissBanner, router]);
@@ -121,6 +156,11 @@ export const InAppNotificationBanner = () => {
         const newCount = getChatUnreadCount(chatData);
         const prevCount = unreadCountsRef.current[chatId] ?? 0;
 
+        // Dismiss tray notification if conversation was read (e.g. read synced from another device)
+        if (newCount === 0 && prevCount > 0) {
+          dismissChatNotification(chatId);
+        }
+
         const getTs = (ts: any) => {
           if (!ts) return 0;
           if (typeof ts.toMillis === "function") return ts.toMillis();
@@ -135,16 +175,20 @@ export const InAppNotificationBanner = () => {
         // Condition to show in-app banner:
         // 1. Not the very first load (seed initial state)
         // 2. Either unread count increased OR newer message timestamp arrived from an agent
-        // 3. Last message is from an agent (not the user's own sent message)
+        // 3. Sender is 'agent' (exclude customer messages and system messages like "This chat has been closed")
         // 4. User is NOT currently viewing this exact chat
-        const isFromAgent = chatData.lastMessageSender !== "user";
+        const isFromAgent = chatData.lastMessageSender === "agent";
         const hasNewActivity = newCount > prevCount || (currentTs > prevTs && currentTs > 0);
+        const isClosedSystemMessage =
+          chatData.chatStatus === "closed" &&
+          (chatData.lastMessage?.toLowerCase().includes("closed") || chatData.lastMessageSender === "system");
 
         if (
           !isInitialLoadRef.current &&
           hasNewActivity &&
           isFromAgent &&
-          currentActiveChatId !== chatId
+          !isClosedSystemMessage &&
+          !isViewingChat(chatId)
         ) {
           const isSupport =
             chatData.type === "support" ||
@@ -156,7 +200,16 @@ export const InAppNotificationBanner = () => {
             : `Trade Support ~ ${chatData.cardName || "Gift Card"}`;
 
           const preview = chatData.lastMessage || "New message received";
-          showBanner(title, preview, chatData);
+          showBanner({
+            name: title,
+            text: preview,
+            chat: chatData,
+            chatId: chatData.chatId,
+            tradeId: chatData.tradeId,
+            cardName: chatData.cardName,
+            cardCategory: chatData.cardCategory,
+            isSupport,
+          });
         }
 
         unreadCountsRef.current[chatId] = newCount;
@@ -198,13 +251,20 @@ export const InAppNotificationBanner = () => {
           <Text style={styles.inAppBannerName} numberOfLines={1}>
             {inAppNotif.name}
           </Text>
-          <Text style={styles.inAppBannerMsg} numberOfLines={1}>
+          <Text style={styles.inAppBannerPreview} numberOfLines={1}>
             {inAppNotif.text}
           </Text>
         </View>
-      </Pressable>
-      <Pressable onPress={dismissBanner} hitSlop={12} style={styles.closeButton}>
-        <X size={18} color="rgba(255,255,255,0.7)" />
+        <Pressable
+          hitSlop={12}
+          onPress={(e) => {
+            e.stopPropagation();
+            dismissBanner();
+          }}
+          style={styles.closeButton}
+        >
+          <X size={18} color="rgba(255, 255, 255, 0.7)" />
+        </Pressable>
       </Pressable>
     </Animated.View>
   );
@@ -213,27 +273,24 @@ export const InAppNotificationBanner = () => {
 const styles = StyleSheet.create({
   inAppBanner: {
     position: "absolute",
-    top: 0,
-    left: 12,
-    right: 12,
-    backgroundColor: "#1a1a2e",
-    borderRadius: 16,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 20,
+    left: 16,
+    right: 16,
     zIndex: 99999,
+    backgroundColor: "#1a1a2e",
+    borderRadius: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
   },
   contentRow: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   inAppBannerIcon: {
     width: 42,
@@ -242,23 +299,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#28A712",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
   },
   inAppBannerText: {
     flex: 1,
   },
   inAppBannerName: {
-    fontFamily: "MonaSans-Bold",
     color: "#ffffff",
+    fontFamily: "MonaSans-Bold",
     fontSize: 14,
-    fontWeight: "700",
+    lineHeight: 18,
     marginBottom: 2,
   },
-  inAppBannerMsg: {
+  inAppBannerPreview: {
+    color: "rgba(255, 255, 255, 0.7)",
     fontFamily: "MonaSans-Regular",
-    color: "rgba(255,255,255,0.7)",
     fontSize: 13,
+    lineHeight: 17,
   },
   closeButton: {
-    padding: 4,
+    padding: 6,
+    marginLeft: 8,
   },
 });

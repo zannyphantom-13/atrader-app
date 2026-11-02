@@ -1,4 +1,5 @@
-import { setGlobalActiveChatId } from "@/components/customs/InAppNotificationBanner";
+import { setGlobalActiveChatId, dismissChatNotification } from "@/lib/chat-state";
+import { markChatReadByUser } from "@/lib/firebase-chat-service";
 import EndChatModal from "@/components/modals/EndChatModal";
 import { TradeDetailsDrawer } from "@/components/modals/TradeDetailsDrawer";
 import { MessageBubbleSkeleton } from "@/components/skeletons/chatskeleton";
@@ -17,7 +18,7 @@ import { TokenManager } from "@/utils/secure-store-adapter";
 import { openChat } from "@/lib/zoho-service";
 import { BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
 import { ArrowLeft, ChevronDown, ImagePlus, X } from "lucide-react-native";
@@ -115,14 +116,18 @@ const TradeChat = () => {
       : null);
 
   const [chatId, setChatId] = useState<string | null>(resolvedChatId);
-  useEffect(() => {
-    if (chatId) {
-      setGlobalActiveChatId(chatId);
-    }
-    return () => {
-      setGlobalActiveChatId(null);
-    };
-  }, [chatId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (chatId) {
+        setGlobalActiveChatId(chatId);
+        dismissChatNotification(chatId);
+        markChatReadByUser(chatId).catch(() => {});
+      }
+      return () => {
+        setGlobalActiveChatId(null);
+      };
+    }, [chatId])
+  );
 
   const [inputText, setInputText] = useState("");
   const [isCreating, setIsCreating] = useState(false);

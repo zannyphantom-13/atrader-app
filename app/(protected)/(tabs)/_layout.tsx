@@ -285,6 +285,8 @@ const TabsLayout = () => {
             color: "#FFFFFF",
             fontSize: 10,
             fontWeight: "700",
+            borderWidth: 2,
+            borderColor: isDark ? "#0C0C0C" : "#ffffff",
           },
         }}
 

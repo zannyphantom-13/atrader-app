@@ -16,16 +16,129 @@ import React, {
   useState,
 } from "react";
 import { AppState, Platform } from "react-native";
+import {
+  isViewingChat,
+  getChatNotificationId,
+  dismissChatNotification,
+  isMessageProcessed,
+  markMessageProcessed,
+} from "@/lib/chat-state";
+import { markChatReadByUser } from "@/lib/firebase-chat-service";
+import { showInAppNotification } from "@/components/customs/InAppNotificationBanner";
+
+export const CHANNEL_CHAT_SILENT = "chat_silent";
+export const CHANNEL_CHAT_ALERTS = "chat_alerts";
+
+// Setup Android notification channels
+export const setupNotificationChannelsAsync = async () => {
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync(CHANNEL_CHAT_SILENT, {
+      name: "Silent Chat Notifications",
+      importance: Notifications.AndroidImportance.LOW,
+      sound: null,
+      enableVibrate: false,
+      showBadge: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
+
+    await Notifications.setNotificationChannelAsync(CHANNEL_CHAT_ALERTS, {
+      name: "Chat Alerts",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: "default",
+      enableVibrate: true,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#28A712",
+      showBadge: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
+  }
+};
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const trigger = notification.request.trigger as any;
+    const data =
+      trigger?.remoteMessage?.data ||
+      notification.request.content.data ||
+      {};
+
+    const chatId = data.chatId || data.conversationId;
+    const isAppInForeground = AppState.currentState === "active";
+
+    // Case 2.1: Viewing THAT specific chat directly in foreground
+    if (chatId && isViewingChat(chatId)) {
+      dismissChatNotification(chatId);
+      markChatReadByUser(chatId).catch(() => {});
+
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      };
+    }
+
+    // Case 2.1: In foreground, viewing ANOTHER screen or ANOTHER chat
+    if (isAppInForeground && chatId) {
+      const messageId = data.messageId || notification.request.identifier;
+
+      if (!isMessageProcessed(messageId)) {
+        markMessageProcessed(messageId);
+
+        const notifTitle =
+          notification.request.content.title ||
+          (data.cardName ? `Atrader — ${data.cardName}` : "Atrader Support");
+        const notifBody =
+          notification.request.content.body ||
+          data.preview ||
+          "New message received";
+
+        if (Platform.OS === "android") {
+          Notifications.scheduleNotificationAsync({
+            identifier: getChatNotificationId(chatId),
+            content: {
+              title: notifTitle,
+              body: notifBody,
+              data: data,
+              sound: false,
+              vibrate: [],
+            },
+            trigger: {
+              channelId: CHANNEL_CHAT_SILENT,
+            },
+          }).catch(() => {});
+        }
+
+        showInAppNotification({
+          name: notifTitle,
+          text: notifBody,
+          chatId,
+          tradeId: data.tradeId || null,
+          cardName: data.cardName || null,
+          cardCategory: data.cardCategory || null,
+          isSupport: !data.tradeId || String(chatId).startsWith("support_"),
+        });
+      }
+
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: true,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      };
+    }
+
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
 
 interface NotificationContextType {
@@ -238,9 +351,25 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       Notifications.addNotificationResponseReceivedListener((response) => {
         console.log("👆 [NOTIFICATION_RESPONSE] Interaction:", JSON.stringify(response, null, 2));
 
-        // Handle notification tap - navigate to specific screen
-        const data = response.notification.request.content.data;
-        if (typeof data?.screen === "string") {
+        const trigger = response.notification.request.trigger as any;
+        const data = trigger?.remoteMessage?.data || response.notification.request.content.data || {};
+        const chatId = data.chatId || data.conversationId;
+
+        if (chatId) {
+          dismissChatNotification(chatId);
+          const isSupport = !data.tradeId || String(chatId).startsWith("support_");
+          router.push({
+            pathname: "/(protected)/(features)/trade-chat" as any,
+            params: {
+              chatId,
+              tradeId: data.tradeId || "",
+              cardName: data.cardName || (isSupport ? "App Support" : "Gift Card"),
+              cardCategory: data.cardCategory || (isSupport ? "Support" : ""),
+              type: "existing",
+              isSupport: isSupport ? "true" : "false",
+            },
+          });
+        } else if (typeof data?.screen === "string") {
           router.push(data.screen as any);
         }
       });

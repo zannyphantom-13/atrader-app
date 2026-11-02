@@ -1,3 +1,4 @@
+import { isViewingChat, dismissChatNotification } from "./chat-state";
 import {
   addDoc,
   collection,
@@ -214,6 +215,21 @@ export const createTradeChat = async (
  */
 export const getChatUnreadCount = (chat: any): number => {
   if (!chat) return 0;
+  // Rule 9: Closed chats carry no badge for system "closed" message
+  if (
+    chat.chatStatus === "closed" ||
+    chat.status === "closed" ||
+    chat.status === "reject" ||
+    chat.tradeStatus === "rejected"
+  ) {
+    if (
+      chat.lastMessageSender === "system" ||
+      !chat.lastMessageSender ||
+      String(chat.lastMessage || "").toLowerCase().includes("closed")
+    ) {
+      return 0;
+    }
+  }
   const count = Math.max(
     Number(chat.unreadByCustomer || 0),
     Number(chat.unreadByUser || 0),
@@ -257,12 +273,17 @@ export const sendMessage = async (
     updateData.unreadByCustomer = 0;
     updateData.unreadCount = 0;
     updateData.unread_count = 0;
-  } else {
-    updateData.unreadByUser = increment(1);
-    updateData.unreadByCustomer = increment(1);
-    updateData.unreadCount = increment(1);
-    updateData.unread_count = increment(1);
+  } else if (messageData.senderType === "agent") {
+    // Only increment customer count if customer is NOT currently viewing this chat
+    if (!isViewingChat(chatId)) {
+      updateData.unreadByUser = increment(1);
+      updateData.unreadByCustomer = increment(1);
+      updateData.unreadCount = increment(1);
+      updateData.unread_count = increment(1);
+    }
     updateData.unreadByAgent = 0;
+  } else {
+    // Rule 1 & 9: System messages (e.g. welcome, closed, status) never increment unread counts
   }
 
   await updateDoc(chatRef, updateData);
@@ -453,6 +474,8 @@ export const subscribeToUserChats = (
  */
 export const markChatReadByUser = async (chatId: string): Promise<void> => {
   if (!chatId) return;
+  // Dismiss any system tray notification for this conversation
+  dismissChatNotification(chatId);
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   try {
     await updateDoc(chatRef, {
