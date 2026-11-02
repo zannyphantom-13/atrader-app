@@ -20,6 +20,8 @@ const TabsLayout = () => {
   const { isDark } = useTheme();
   const { user, selectedAvatarId } = useAppSelector((state) => state.auth);
   const insets = useSafeAreaInsets();
+  const bottomPadding = insets.bottom > 0 ? Math.min(insets.bottom, 14) : 6;
+  const tabHeight = Platform.OS === "ios" ? 54 + insets.bottom : 58 + bottomPadding;
   const { user: userInfo } = user || {};
   const currentAuthUid = getAuth().currentUser?.uid;
   const userId = currentAuthUid || (userInfo?.email ? String(userInfo.email) : "") || (userInfo?.id ? String(userInfo.id) : "");
@@ -46,19 +48,24 @@ const TabsLayout = () => {
         tabBarInactiveTintColor: "gray",
         tabBarStyle: {
           backgroundColor: isDark ? "#0C0C0C" : "#ffffff",
-          borderTopWidth: 0,
-          // borderTopColor: isDark ? "#232323" : "#EFEFEF",
+          borderTopWidth: 0.5,
+          borderTopColor: isDark ? "#1C1C1C" : "#F0F0F0",
           elevation: 0,
           shadowOpacity: 0,
-          height: Platform.OS === "ios" ? 80 : 80 + insets.bottom,
-          // paddingBottom: Platform.OS === "ios" ? 0: insets.bottom,
-          paddingInline: 10,
+          height: tabHeight,
+          paddingBottom: bottomPadding,
+          paddingTop: 6,
+          paddingHorizontal: 8,
         },
         tabBarLabelStyle: {
           fontFamily: "MonaSans",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: "600",
-          paddingTop: 4,
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          justifyContent: "center",
+          alignItems: "center",
         },
       }}
     // tabBar={(props) => <CustomTabBar {...props} />}
