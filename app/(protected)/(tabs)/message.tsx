@@ -6,7 +6,7 @@ import { img } from "@/constant/image";
 import { useNotifications } from "@/context/NotificationsProvider";
 import { useTheme } from "@/context/ThemeProvider";
 import { useChatList } from "@/hooks/useChatList";
-import { createTradeChat } from "@/lib/firebase-chat-service";
+import { createTradeChat, getChatUnreadCount } from "@/lib/firebase-chat-service";
 import { openAppSupport, openChat } from "@/lib/zoho-service";
 import { useGiftCardSupportRouting } from "@/hooks/useGiftCardSupportRouting";
 import { useAppSelector } from "@/redux/store";
@@ -179,10 +179,10 @@ const SupportChatScreen = () => {
           <ThemedText family="secondary" variant="secondary" className="text-[11px] mb-1">
             {formatTimestamp(item.lastMessageAt)}
           </ThemedText>
-          {item.unreadByUser > 0 && (
+          {getChatUnreadCount(item) > 0 && (
             <View className="bg-[#22C55E] w-5 h-5 rounded-full items-center justify-center">
               <ThemedText className="text-[10px] !text-white" weight="bold">
-                {item.unreadByUser > 9 ? "9+" : item.unreadByUser}
+                {getChatUnreadCount(item) > 9 ? "9+" : getChatUnreadCount(item)}
               </ThemedText>
             </View>
           )}
