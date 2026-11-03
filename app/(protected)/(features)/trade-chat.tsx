@@ -40,10 +40,36 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-// Reanimated not needed for chat keyboard handling
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Keyboard handling matching Super Admin (atrader-chat)
+const isKeyboardControllerLinked = Boolean(
+  NativeModules?.KeyboardController ||
+  (global as any)?.__turboModuleProxy?.('KeyboardController')
+);
+
+let KeyboardController: any = {
+  setInputMode: () => { },
+};
+let AndroidSoftInputModes: any = {
+  SOFT_INPUT_ADJUST_RESIZE: 0,
+};
+let useKeyboardHandler: any = (callbacks: any) => { };
+
+if (isKeyboardControllerLinked) {
+  try {
+    const kc = require("react-native-keyboard-controller");
+    KeyboardController = kc.KeyboardController;
+    AndroidSoftInputModes = kc.AndroidSoftInputModes;
+    useKeyboardHandler = kc.useKeyboardHandler;
+  } catch (e) {
+    // Fallback when native module is missing
+  }
+}
 
 const isSystemMessage = (m: { senderType?: string; type?: string; text?: string }) => {
   if (m.senderType === "user") return false;
@@ -186,27 +212,74 @@ const TradeChat = () => {
     initChat();
   }, [params.tradeId, params.type]);
 
-    // Keyboard height tracking matching Super Admin (atrader-chat)
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
+  // Set Android soft input mode to RESIZE so KeyboardController can intercept frames
   useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-      }
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
+    if (Platform.OS === "android" && isKeyboardControllerLinked) {
+      try {
+        KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_RESIZE);
+      } catch (e) {}
+    }
   }, []);
+
+  const keyboardHeight = useSharedValue(0);
+
+  // Synchronized frame-by-frame 60/120fps keyboard animation (moves simultaneously with keyboard)
+  useKeyboardHandler(
+    {
+      onStart: (e: any) => {
+        "worklet";
+        keyboardHeight.value = Math.abs(e.height);
+      },
+      onMove: (e: any) => {
+        "worklet";
+        keyboardHeight.value = Math.abs(e.height);
+      },
+      onInteractive: (e: any) => {
+        "worklet";
+        keyboardHeight.value = Math.abs(e.height);
+      },
+      onEnd: (e: any) => {
+        "worklet";
+        keyboardHeight.value = Math.abs(e.height);
+      },
+    },
+    []
+  );
+
+  // Fallback for environments without native KeyboardController
+  useEffect(() => {
+    if (!isKeyboardControllerLinked) {
+      const showSub = Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+        (e) => {
+          keyboardHeight.value = withTiming(e.endCoordinates.height, { duration: 250 });
+        }
+      );
+      const hideSub = Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+        () => {
+          keyboardHeight.value = withTiming(0, { duration: 200 });
+        }
+      );
+      return () => {
+        showSub.remove();
+        hideSub.remove();
+      };
+    }
+  }, []);
+
+  // Moves upwards by an extra 30px clearance as requested
+  const animatedContainerStyle = useAnimatedStyle(() => {
+    const kh = keyboardHeight.value;
+    if (kh > 0) {
+      return {
+        paddingBottom: kh + 30,
+      };
+    }
+    return {
+      paddingBottom: 0,
+    };
+  });
 
   const isSupportChat =
     Boolean(chatId?.startsWith("support_")) ||
@@ -764,7 +837,7 @@ const TradeChat = () => {
   return (
     <BottomSheetModalProvider>
       <ThemedView className="flex-1">
-        <View style={{ flex: 1, paddingBottom: keyboardHeight }}>
+        <Animated.View style={[{ flex: 1 }, animatedContainerStyle]}>
           {/* Header */}
           <SafeAreaView edges={["top"]} className="bg-background-light dark:bg-background-dark">
             <View className="flex-row items-center px-5 py-3">
@@ -1038,7 +1111,7 @@ const TradeChat = () => {
             className="pt-3 border-t bg-white dark:bg-[#111111]"
             style={{
               borderTopColor: isDark ? "#232323" : "#EFEFEF",
-              paddingBottom: keyboardHeight > 0 ? 10 : Math.max(insets.bottom, 10),
+              paddingBottom: Math.max(insets.bottom, 12),
             }}
           >
             <View className="px-5">
@@ -1115,7 +1188,7 @@ const TradeChat = () => {
               </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* End Chat Modal */}
         <EndChatModal
