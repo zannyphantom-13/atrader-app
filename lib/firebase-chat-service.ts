@@ -1,4 +1,4 @@
-import { isViewingChat, dismissChatNotification } from "./chat-state";
+﻿import { isViewingChat, dismissChatNotification } from "./chat-state";
 import {
   addDoc,
   collection,
@@ -262,7 +262,7 @@ export const sendMessage = async (
   // Update the chat's last message and unread counts
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   const updateData: Record<string, any> = {
-    lastMessage: messageData.type === "image" ? "📷 Image" : messageData.text,
+    lastMessage: messageData.type === "image" ? "ðŸ“· Image" : messageData.text,
     lastMessageAt: serverTimestamp(),
     lastMessageSender: messageData.senderType,
     updatedAt: serverTimestamp(),
@@ -422,11 +422,13 @@ export const subscribeToChat = (
  * Subscribe to all chats for a user (for the message list screen)
  */
 export const subscribeToUserChats = (
-  userId: string | string[],
+  userId: string | number | (string | number)[],
   callback: (chats: ChatDocument[]) => void,
 ): Unsubscribe => {
   const ids = (Array.isArray(userId) ? userId : [userId])
-    .filter((id): id is string => Boolean(id) && typeof id === "string" && id.trim().length > 0);
+    .filter((id) => id !== null && id !== undefined && id !== "")
+    .map((id) => String(id).trim())
+    .filter((id) => id.length > 0);
 
   if (ids.length === 0) {
     callback([]);

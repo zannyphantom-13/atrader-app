@@ -11,6 +11,7 @@ import {
 import { icons } from "@/constant/icon";
 import { useTheme } from "@/context/ThemeProvider";
 import { registerForPushNotificationsAsync } from "@/context/NotificationsProvider";
+import { showInAppNotification } from "@/components/customs/InAppNotificationBanner";
 import { useToast } from "@/context/ToastProvider";
 import { useAuth } from "@/guards/guard";
 // import { setZohoVisitor } from "@/lib/zoho-service";
@@ -163,6 +164,13 @@ const Login = () => {
       } else {
         await TokenManager.setToken(res?.token);
         dispatch(setLoginSuccess());
+
+        const welcomeName =
+          res?.user?.name || res?.user?.username || userInfo?.username || "Trader";
+        showInAppNotification({
+          name: "Welcome to Atrader",
+          text: `Welcome back, ${welcomeName}!`,
+        });
 
         // If the push token was null at submit time (e.g. EAS update where
         // Constants.expoConfig is null), try to read or generate it now and

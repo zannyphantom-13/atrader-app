@@ -108,7 +108,9 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/v1/notification-icon.png"
+          "icon": "./assets/v1/notification-icon.png",
+          "defaultChannel": "chat_alerts",
+          "sounds": []
         }
       ],
       [

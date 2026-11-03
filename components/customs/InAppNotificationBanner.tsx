@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Platform,
@@ -142,10 +142,20 @@ export const InAppNotificationBanner = () => {
   // Subscribe to all chats for the logged in user
   useEffect(() => {
     const authUid = getAuth().currentUser?.uid;
+    const rawIds = [
+      authUid,
+      userInfo?.email,
+      userInfo?.id,
+      (userInfo as any)?._id,
+      (user as any)?.user?.id,
+      (user as any)?.user?.email,
+    ];
     const candidateIds = Array.from(
       new Set(
-        [authUid, userInfo?.email, userInfo?.id]
-          .filter((id): id is string => Boolean(id) && typeof id === "string" && id.trim().length > 0)
+        rawIds
+          .filter((id) => id !== null && id !== undefined && id !== "")
+          .map((id) => String(id).trim())
+          .filter((id) => id.length > 0)
       )
     );
 

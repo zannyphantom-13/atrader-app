@@ -256,15 +256,32 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
         // Forward to Zoho to see if this push came from SalesIQ
         const trigger = notification.request.trigger as any;
-        const pushData = trigger?.remoteMessage?.data || notification.request.content.data;
+        const pushData = trigger?.remoteMessage?.data || notification.request.content.data || {};
         handleIncomingZohoNotification(pushData);
 
-        // // Visual alert for debugging
-        // Alert.alert(
-        //   "Notification Received",
-        //   `Title: ${notification.request.content.title}\nBody: ${notification.request.content.body}`,
-        //   [{ text: "OK" }]
-        // );
+        const chatId = pushData?.chatId || pushData?.conversationId;
+        const isAppInForeground = AppState.currentState === "active";
+
+        // Show In-App Notification banner when foregrounded and not viewing this exact chat
+        if (isAppInForeground && (!chatId || !isViewingChat(chatId))) {
+          const notifTitle =
+            notification.request.content.title ||
+            (pushData?.cardName ? `Atrader — ${pushData.cardName}` : "Atrader");
+          const notifBody =
+            notification.request.content.body ||
+            pushData?.preview ||
+            "New message received";
+
+          showInAppNotification({
+            name: notifTitle,
+            text: notifBody,
+            chatId,
+            tradeId: pushData?.tradeId || null,
+            cardName: pushData?.cardName || null,
+            cardCategory: pushData?.cardCategory || null,
+            isSupport: !pushData?.tradeId || String(chatId).startsWith("support_"),
+          });
+        }
 
         const newCount = unreadCount + 1;
         await updateUnreadCount(newCount);

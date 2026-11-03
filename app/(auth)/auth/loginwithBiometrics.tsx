@@ -1,4 +1,4 @@
-import { ThemedText } from "@/components/theme/themeText";
+﻿import { ThemedText } from "@/components/theme/themeText";
 import { ThemedView } from "@/components/theme/themeView";
 import { AlertComponent } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,10 @@ import { signInWithCustomToken, getAuth } from "firebase/auth";
 import {
   useLoginMutation,
   useLoginWithBiometricsMutation,
+  useSendNotificationTokenMutation,
 } from "@/redux/auth/auth_api";
+import { registerForPushNotificationsAsync } from "@/context/NotificationsProvider";
+import { showInAppNotification } from "@/components/customs/InAppNotificationBanner";
 import { setUser, setUserEmail } from "@/redux/auth/auth_slice";
 import {
   setIsBiometricEnabled,
@@ -78,6 +81,7 @@ const LoginWithBiometrics = () => {
   const [login, { isLoading }] = useLoginMutation();
   const [loginWithBiometrics, { isLoading: biometricLoginLoading }] =
     useLoginWithBiometricsMutation();
+  const [sendNotificationToken] = useSendNotificationTokenMutation();
 
   // Validate individual field
   const validateField = (field: keyof LoginFormData, value: string) => {
@@ -200,6 +204,24 @@ const LoginWithBiometrics = () => {
         } else {
           dispatch(setLoginSuccess());
 
+          const userData = response?.data?.user || response?.user || userInfo;
+          const welcomeName = userData?.name || userData?.username || "Trader";
+          showInAppNotification({
+            name: "Welcome to Atrader",
+            text: `Welcome back, ${welcomeName}!`,
+          });
+
+          // Sync notification token to backend
+          try {
+            const latestToken =
+              (await TokenManager.getNotificationToken()) ||
+              (await registerForPushNotificationsAsync());
+            if (latestToken) {
+              await TokenManager.setNotificationToken(latestToken);
+              await sendNotificationToken({ data: { app_token: latestToken } });
+            }
+          } catch (_e) {}
+
           // Sign into Firebase immediately so chat is ready
           const biometricRes = response?.data || response || {};
           if (biometricRes?.firebase_token) {
@@ -213,7 +235,6 @@ const LoginWithBiometrics = () => {
           }
 
           // Register with Zoho on biometric login
-          const userData = response?.data?.user || response?.user;
           if (userData?.email) {
             setZohoVisitor(userData.email, userData.email, userData.name);
           }
@@ -298,6 +319,23 @@ const LoginWithBiometrics = () => {
         await TokenManager.setToken(res?.token);
         dispatch(setLoginSuccess());
 
+        const pwdUserData = res?.user || userInfo;
+        const pwdWelcomeName = pwdUserData?.name || pwdUserData?.username || "Trader";
+        showInAppNotification({
+          name: "Welcome to Atrader",
+          text: `Welcome back, ${pwdWelcomeName}!`,
+        });
+
+        try {
+          const latestToken =
+            (await TokenManager.getNotificationToken()) ||
+            (await registerForPushNotificationsAsync());
+          if (latestToken) {
+            await TokenManager.setNotificationToken(latestToken);
+            await sendNotificationToken({ data: { app_token: latestToken } });
+          }
+        } catch (_e) {}
+
         // Sign into Firebase immediately so chat is ready
         if (res?.firebase_token) {
           try {
@@ -371,7 +409,7 @@ const LoginWithBiometrics = () => {
             >
               {/* {atex === null
                 ? `Welcome Back `
-                : `Welcome back ${userInfo?.username || "Fam!"}✌🏽`} */}
+                : `Welcome back ${userInfo?.username || "Fam!"}âœŒðŸ½`} */}
               {`Welcome back, ${userInfo?.username || "Fam"}`}!
             </ThemedText>
             {/* <ThemedTe
