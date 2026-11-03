@@ -218,12 +218,18 @@ const TradeChat = () => {
     initChat();
   }, [params.tradeId, params.type]);
 
-  // Set Android soft input mode to RESIZE so KeyboardController can intercept frames
+  // Handle Android Soft Input Mode (ADJUST_NOTHING prevents window resizing, avoiding double-spacing)
   useEffect(() => {
-    if (Platform.OS === "android" && isKeyboardControllerLinked) {
+    if (Platform.OS === "android") {
       try {
-        KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_RESIZE);
+        KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_NOTHING);
       } catch (e) {}
+      return () => {
+        // Restore default on unmount
+        try {
+          KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_RESIZE);
+        } catch (e) {}
+      };
     }
   }, []);
 
@@ -234,19 +240,19 @@ const TradeChat = () => {
     {
       onStart: (e: any) => {
         "worklet";
-        keyboardHeight.value = Math.abs(e.height);
+        keyboardHeight.value = e.height;
       },
       onMove: (e: any) => {
         "worklet";
-        keyboardHeight.value = Math.abs(e.height);
+        keyboardHeight.value = e.height;
       },
       onInteractive: (e: any) => {
         "worklet";
-        keyboardHeight.value = Math.abs(e.height);
+        keyboardHeight.value = e.height;
       },
       onEnd: (e: any) => {
         "worklet";
-        keyboardHeight.value = Math.abs(e.height);
+        keyboardHeight.value = e.height;
       },
     },
     []
@@ -274,17 +280,9 @@ const TradeChat = () => {
     }
   }, []);
 
-  const animatedContainerStyle = useAnimatedStyle(() => {
-    const kh = keyboardHeight.value;
-    if (kh > 0) {
-      return {
-        paddingBottom: kh,
-      };
-    }
-    return {
-      paddingBottom: 0,
-    };
-  });
+  const animatedContainerStyle = useAnimatedStyle(() => ({
+    paddingBottom: Math.max(0, Math.abs(keyboardHeight.value) - (Platform.OS === "android" ? insets.bottom - 10 : insets.bottom - 10)),
+  }));
 
   const isSupportChat =
     Boolean(chatId?.startsWith("support_")) ||
@@ -898,7 +896,7 @@ const TradeChat = () => {
   // ============================================
   return (
     <BottomSheetModalProvider>
-      <ThemedView className="flex-1">
+      <ThemedView className="flex-1" style={{ paddingBottom: insets.bottom }}>
         <Animated.View style={[{ flex: 1 }, animatedContainerStyle]}>
           {/* Header */}
           <SafeAreaView edges={["top"]} className="bg-background-light dark:bg-background-dark">

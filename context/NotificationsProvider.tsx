@@ -56,95 +56,13 @@ export const setupNotificationChannelsAsync = async () => {
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    const trigger = notification.request.trigger as any;
-    const data =
-      trigger?.remoteMessage?.data ||
-      notification.request.content.data ||
-      {};
-
-    const chatId = data.chatId || data.conversationId;
-    const isAppInForeground = AppState.currentState === "active";
-
-    // Case 2.1: Viewing THAT specific chat directly in foreground
-    if (chatId && isViewingChat(chatId)) {
-      dismissChatNotification(chatId);
-      markChatReadByUser(chatId).catch(() => {});
-
-      return {
-        shouldShowAlert: false,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-        shouldShowBanner: false,
-        shouldShowList: false,
-      };
-    }
-
-    // Case 2.1: In foreground, viewing ANOTHER screen or ANOTHER chat
-    if (isAppInForeground && chatId) {
-      const messageId = data.messageId || notification.request.identifier;
-
-      if (!isMessageProcessed(messageId)) {
-        markMessageProcessed(messageId);
-
-        const notifTitle =
-          notification.request.content.title ||
-          (data.cardName ? `Atrader — ${data.cardName}` : "Atrader Support");
-        const notifBody =
-          notification.request.content.body ||
-          data.preview ||
-          "New message received";
-
-        if (Platform.OS === "android") {
-          // Schedule a silent Android tray notification grouped by chat
-          Notifications.scheduleNotificationAsync({
-            identifier: getChatNotificationId(chatId),
-            content: {
-              title: notifTitle,
-              body: notifBody,
-              data: data,
-              sound: false,
-              vibrate: [],
-              // Group key — all messages from the same chat stack under one entry
-              ...(Platform.OS === "android" && {
-                sticky: false,
-                priority: Notifications.AndroidNotificationPriority.LOW,
-              }),
-            },
-            trigger: {
-              channelId: CHANNEL_CHAT_SILENT,
-            },
-          }).catch(() => {});
-        }
-
-        showInAppNotification({
-          name: notifTitle,
-          text: notifBody,
-          chatId,
-          tradeId: data.tradeId || null,
-          cardName: data.cardName || null,
-          cardCategory: data.cardCategory || null,
-          isSupport: !data.tradeId || String(chatId).startsWith("support_"),
-        });
-      }
-
-      return {
-        shouldShowAlert: false,
-        shouldPlaySound: false,
-        shouldSetBadge: true,
-        shouldShowBanner: false,
-        shouldShowList: false,
-      };
-    }
-
-    return {
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    };
-  },
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
 });
 
 interface NotificationContextType {
@@ -584,6 +502,22 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#2B2390",
+    });
+    await Notifications.setNotificationChannelAsync("chat_alerts", {
+      name: "Chat Alerts",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: "default",
+      enableVibrate: true,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#28A712",
+    });
+    await Notifications.setNotificationChannelAsync("chat_alerts_v2", {
+      name: "Chat Alerts",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: "default",
+      enableVibrate: true,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#28A712",
     });
   }
 
