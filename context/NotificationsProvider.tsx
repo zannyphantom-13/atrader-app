@@ -1,4 +1,4 @@
-import { handleIncomingZohoNotification, registerDeviceTokenForZoho } from "@/lib/zoho-service";
+﻿import { handleIncomingZohoNotification, registerDeviceTokenForZoho } from "@/lib/zoho-service";
 import { setNotificationEnabledStatus } from "@/redux/auth/session";
 import { useAppDispatch, useAppSelector } from "@/redux/store";
 import { TokenManager } from "@/utils/secure-store-adapter";
@@ -98,7 +98,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   );
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
   const dispatch = useAppDispatch();
-  const [unreadCount, setUnreadCount] = useState(0); // ← ADD THIS STATE
+  const [unreadCount, setUnreadCount] = useState(0); // â† ADD THIS STATE
   // const { notificationEnabledStatus, notificationToken } = useAppSelector(
   //   (state) => state.auth
   // );
@@ -251,7 +251,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     // Listen for incoming notifications while app is running
     notificationListener.current =
       Notifications.addNotificationReceivedListener(async (notification) => {
-        console.log("🔔 [NOTIFICATION_ENTRY] Received:", JSON.stringify(notification, null, 2));
+        console.log("ðŸ”” [NOTIFICATION_ENTRY] Received:", JSON.stringify(notification, null, 2));
         setNotification(notification);
 
         // Forward to Zoho to see if this push came from SalesIQ
@@ -273,7 +273,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     // Listen for user interactions with notifications
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("👆 [NOTIFICATION_RESPONSE] Interaction:", JSON.stringify(response, null, 2));
+        console.log("ðŸ‘† [NOTIFICATION_RESPONSE] Interaction:", JSON.stringify(response, null, 2));
 
         const trigger = response.notification.request.trigger as any;
         const data = trigger?.remoteMessage?.data || response.notification.request.content.data || {};
@@ -306,10 +306,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
     return () => {
       subscription?.remove();
-      notificationListener.current && subscription.remove();
-      //   Notifications.removeNotificationSubscription(notificationListener.current);
-      responseListener.current && subscription.remove();
-      //    Notifications.removeNotificationSubscription(responseListener.current);
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+        notificationListener.current = null;
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current = null;
+      }
     };
   }, [unreadCount]);
 
@@ -493,7 +497,7 @@ export function useNotifications() {
 }
 
 // Helper function to register for push notifications and get the token
-async function registerForPushNotificationsAsync(): Promise<string | null> {
+export async function registerForPushNotificationsAsync(): Promise<string | null> {
   let token = null;
 
   if (Platform.OS === "android") {
@@ -537,15 +541,15 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     }
 
     try {
-      const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
-      if (projectId == null || projectId === "" || !projectId) {
-        console.error("EAS Project ID is not set in app config");
-
-        return null;
-      }
+      // Constants.expoConfig is often null in EAS runtime updates — always fall back to the
+      // hard-coded project ID so token registration never silently fails.
+      const projectId =
+        Constants?.expoConfig?.extra?.eas?.projectId ||
+        (Constants as any)?.easConfig?.projectId ||
+        "58fcebb1-ff94-4120-8381-32984a5e83fc";
       token = (
         await Notifications.getExpoPushTokenAsync({
-          projectId: projectId,
+          projectId,
         })
       ).data;
       console.log("Expo Push Token:", token);

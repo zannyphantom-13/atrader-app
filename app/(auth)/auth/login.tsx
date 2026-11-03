@@ -1,4 +1,4 @@
-const AuthLogo = require("@/assets/v1/auth-logo.png");
+﻿const AuthLogo = require("@/assets/v1/auth-logo.png");
 import { ThemedText } from "@/components/theme/themeText";
 import { ThemedView } from "@/components/theme/themeView";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/form-fields";
 import { icons } from "@/constant/icon";
 import { useTheme } from "@/context/ThemeProvider";
+import { registerForPushNotificationsAsync } from "@/context/NotificationsProvider";
 import { useToast } from "@/context/ToastProvider";
 import { useAuth } from "@/guards/guard";
 // import { setZohoVisitor } from "@/lib/zoho-service";
@@ -19,6 +20,7 @@ import { signInWithCustomToken, getAuth } from "firebase/auth";
 import {
   useLoginMutation,
   useLoginWithBiometricsMutation,
+  useSendNotificationTokenMutation,
 } from "@/redux/auth/auth_api";
 import { setUser, setUserEmail } from "@/redux/auth/auth_slice";
 import {
@@ -86,6 +88,7 @@ const Login = () => {
   const { user: userInfo } = user || {};
   const [login, { isLoading }] = useLoginMutation();
   const [loginWithBiometrics, { isLoading: biometricLoginLoading }] = useLoginWithBiometricsMutation();
+  const [sendNotificationToken] = useSendNotificationTokenMutation();
 
   const FaceIcon = icons.fingerprint;
 
@@ -161,6 +164,25 @@ const Login = () => {
         await TokenManager.setToken(res?.token);
         dispatch(setLoginSuccess());
 
+        // If the push token was null at submit time (e.g. EAS update where
+        // Constants.expoConfig is null), try to read or generate it now and
+        // sync to backend so welcome / transaction notifications work.
+        try {
+          const latestToken =
+            notificationToken ||
+            (await TokenManager.getNotificationToken()) ||
+            (await registerForPushNotificationsAsync());
+          if (latestToken) {
+            await TokenManager.setNotificationToken(latestToken);
+            if (!notificationToken) {
+              // Token was missing at submit time — sync it to backend now
+              await sendNotificationToken({ data: { app_token: latestToken } });
+            }
+          }
+        } catch (_e) {
+          // Non-fatal: token sync will happen on next app state change
+        }
+
         // Sign into Firebase immediately so chat is ready
         if (res?.firebase_token) {
           try {
@@ -195,7 +217,7 @@ const Login = () => {
 
         // console.log("Validation errors:", fieldErrors);
       } else {
-        console.error("Login API error ❌:", error);
+        console.error("Login API error âŒ:", error);
 
         if (error?.status === "unverified") {
           // console.log("User is unverified, navigating to confirm PIN");
