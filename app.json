@@ -137,7 +137,8 @@
           "project": "atrader-app"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "./plugins/zoho-salesiq-plugin.js"
     ],
     "experiments": {
       "typedRoutes": true

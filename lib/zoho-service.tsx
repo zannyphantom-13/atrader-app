@@ -48,11 +48,13 @@ const initZohoChat = () => {
   const accessKey = Platform.OS === "ios" ? IOS_ACCESS_KEY : ANDROID_ACCESS_KEY;
 
   if (appKey && accessKey) {
-    // Decode keys if they are URL-encoded (e.g., containing %)
+    // Decode URL-encoded keys before passing to native SDK
+    const decodedAppKey = decodeURIComponent(appKey);
+    const decodedAccessKey = decodeURIComponent(accessKey);
 
     ZohoSalesIQ.initialize({
-      appKey: appKey,
-      accessKey: accessKey,
+      appKey: decodedAppKey,
+      accessKey: decodedAccessKey,
     })
       .then(() => {
         console.log("Zoho Chat initialized successfully");
