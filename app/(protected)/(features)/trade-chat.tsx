@@ -1253,8 +1253,8 @@ const TradeChat = () => {
                     flexDirection: "row",
                     alignItems: "center",
                     backgroundColor: isDark ? "#0C0C0C" : "#FCFCFC",
-                    borderWidth: 1,
-                    borderColor: isDark ? "#232323" : "#EFEFEF",
+                    borderWidth: 0.5,
+                    borderColor: isDark ? "#1F1F1F" : "#E5E7EB",
                   }}
                 >
                   <TextInput
