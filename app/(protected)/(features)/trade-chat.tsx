@@ -30,6 +30,7 @@ import {
   Animated as RNAnimated,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Keyboard,
   NativeModules,
@@ -212,7 +213,7 @@ const TradeChat = () => {
   // Handle Android Soft Input Mode
   useEffect(() => {
     if (Platform.OS === "android") {
-      KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_NOTHING);
+      KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_RESIZE);
       return () => {
         // Restore default on unmount
         KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_RESIZE);
@@ -819,14 +820,12 @@ const TradeChat = () => {
   // ============================================
   return (
     <BottomSheetModalProvider>
-      <ThemedView className="flex-1"
-        style={{
-          paddingBottom: Platform.OS === "ios"
-            ? insets.bottom
-            : insets.bottom,
-        }}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
       >
-        <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+      <ThemedView className="flex-1">
           {/* Header */}
           <SafeAreaView edges={["top"]} className="bg-background-light dark:bg-background-dark">
             <View className="flex-row items-center px-5 py-3">
@@ -1100,9 +1099,7 @@ const TradeChat = () => {
             className="pt-3 border-t bg-white dark:bg-[#111111]"
             style={{
               borderTopColor: isDark ? "#232323" : "#EFEFEF",
-              // paddingBottom: Platform.OS === "ios"
-              //   ? insets.bottom
-              //   : Math.max(insets.bottom, 12),
+              paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
             }}
           >
             <View className="px-5">
@@ -1179,8 +1176,6 @@ const TradeChat = () => {
               </View>
             </View>
           </View>
-        </Animated.View>
-
 
         {/* End Chat Modal */}
         <EndChatModal
@@ -1262,6 +1257,7 @@ const TradeChat = () => {
         />
 
       </ThemedView>
+      </KeyboardAvoidingView>
     </BottomSheetModalProvider>
   );
 };
