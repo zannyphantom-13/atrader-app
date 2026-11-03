@@ -96,6 +96,7 @@ Notifications.setNotificationHandler({
           "New message received";
 
         if (Platform.OS === "android") {
+          // Schedule a silent Android tray notification grouped by chat
           Notifications.scheduleNotificationAsync({
             identifier: getChatNotificationId(chatId),
             content: {
@@ -104,6 +105,11 @@ Notifications.setNotificationHandler({
               data: data,
               sound: false,
               vibrate: [],
+              // Group key — all messages from the same chat stack under one entry
+              ...(Platform.OS === "android" && {
+                sticky: false,
+                priority: Notifications.AndroidNotificationPriority.LOW,
+              }),
             },
             trigger: {
               channelId: CHANNEL_CHAT_SILENT,

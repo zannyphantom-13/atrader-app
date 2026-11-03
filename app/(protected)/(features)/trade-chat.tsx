@@ -138,6 +138,11 @@ const TradeChat = () => {
   // Snapshot of how many agent messages were unread when the chat was opened
   const [openUnreadCount, setOpenUnreadCount] = useState<number>(0);
   const isUnreadSeededRef = useRef<boolean>(false);
+  // Scroll-position tracking for unread counter behaviour (Section 3)
+  const BOTTOM_THRESHOLD = 150; // px from bottom to be considered "near bottom"
+  const isNearBottomRef = useRef<boolean>(true); // inverted list starts at bottom
+  const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
+  const [floatingUnreadCount, setFloatingUnreadCount] = useState<number>(0);
   const [isEndingChat, setIsEndingChat] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [visibleImageIndex, setVisibleImageIndex] = useState(0);
@@ -378,22 +383,29 @@ const TradeChat = () => {
   // Scroll to bottom when new messages arrive - REMOVED for inverted list
   // Inverted lists are anchored to the bottom by default.
 
-  const handleSend = useCallback(async () => {
-    if (!inputText.trim() || isChatClosed) return;
-    const text = inputText;
-    setInputText("");
-    // User is actively communicating in chat: clear unread counter/divider and sync read state
+  const scrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setShowScrollButton(false);
+    setFloatingUnreadCount(0);
     setOpenUnreadCount(0);
     if (chatId) {
       markChatReadByUser(chatId).catch(() => {});
     }
+  }, [chatId]);
+
+  const handleSend = useCallback(async () => {
+    if (!inputText.trim() || isChatClosed) return;
+    const text = inputText;
+    setInputText("");
+    // User is actively communicating: scroll to bottom, clear unread divider
+    scrollToBottom();
     try {
       await sendText(text);
     } catch (error) {
       setInputText(text); // restore on error
       Alert.alert("Error", "Failed to send message. Please try again.");
     }
-  }, [inputText, sendText, isChatClosed, chatId]);
+  }, [inputText, sendText, isChatClosed, scrollToBottom]);
 
   const handlePickImage = useCallback(async () => {
     if (isChatClosed) return;
@@ -407,10 +419,7 @@ const TradeChat = () => {
     });
 
     if (!result.canceled && result.assets?.length) {
-      setOpenUnreadCount(0);
-      if (chatId) {
-        markChatReadByUser(chatId).catch(() => {});
-      }
+      scrollToBottom();
       try {
         for (const asset of result.assets) {
           await sendImage(asset.uri, asset.fileName || undefined);
@@ -419,7 +428,7 @@ const TradeChat = () => {
         Alert.alert("Error", "Failed to send one or more images. Please try again.");
       }
     }
-  }, [sendImage, isChatClosed, chatId]);
+  }, [sendImage, isChatClosed, scrollToBottom]);
 
   const handleEndChat = useCallback(async () => {
     if (isSupportChat) return; // General app support cannot be ended
@@ -496,6 +505,49 @@ const TradeChat = () => {
   const imageMessages = React.useMemo(() => {
     return chronologicalMessages.filter(msg => msg.type === "image" && msg.imageUrl);
   }, [chronologicalMessages]);
+
+  // Track when new messages arrive while scrolled away from bottom
+  const prevMessageCountRef = useRef<number>(0);
+  useEffect(() => {
+    const prevCount = prevMessageCountRef.current;
+    const currentCount = chronologicalMessages.length;
+    if (currentCount > prevCount && prevCount > 0) {
+      const newAgentMessages = chronologicalMessages
+        .slice(0, currentCount - prevCount)
+        .filter(m => m.senderType !== "user" && !isSystemMessage(m));
+      if (newAgentMessages.length > 0) {
+        if (isNearBottomRef.current) {
+          // User is at bottom: auto-scroll and mark read
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+          if (chatId) markChatReadByUser(chatId).catch(() => {});
+        } else {
+          // User is scrolled up: increment floating counter
+          setFloatingUnreadCount(prev => prev + newAgentMessages.length);
+        }
+      }
+    }
+    prevMessageCountRef.current = currentCount;
+  }, [chronologicalMessages.length]);
+
+  const handleScroll = useCallback((event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const nearBottom = offsetY <= BOTTOM_THRESHOLD;
+    const wasNearBottom = isNearBottomRef.current;
+    isNearBottomRef.current = nearBottom;
+
+    if (nearBottom) {
+      // Arrived at bottom: clear everything and mark read
+      if (!wasNearBottom) {
+        setShowScrollButton(false);
+        setFloatingUnreadCount(0);
+        setOpenUnreadCount(0);
+        if (chatId) markChatReadByUser(chatId).catch(() => {});
+      }
+    } else {
+      // Scrolled away from bottom
+      setShowScrollButton(true);
+    }
+  }, [chatId]);
 
   const handleImagePress = (messageId: string) => {
     const index = imageMessages.findIndex(msg => msg.id === messageId);
@@ -1023,6 +1075,8 @@ const TradeChat = () => {
                 flexGrow: 1
               }}
               showsVerticalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={100}
             />
           )}
 
@@ -1114,6 +1168,61 @@ const TradeChat = () => {
                 </View>
               )}
             </View>
+          )}
+
+          {/* Floating scroll-to-latest button */}
+          {showScrollButton && (
+            <Pressable
+              onPress={scrollToBottom}
+              style={{
+                position: "absolute",
+                bottom: 80,
+                alignSelf: "center",
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: isDark ? "#1A1A1A" : "#FFFFFF",
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                shadowColor: "#000",
+                shadowOpacity: 0.18,
+                shadowRadius: 6,
+                shadowOffset: { width: 0, height: 2 },
+                elevation: 5,
+                borderWidth: 1,
+                borderColor: isDark ? "#333" : "#EFEFEF",
+                gap: 6,
+              }}
+            >
+              {floatingUnreadCount > 0 && (
+                <View
+                  style={{
+                    backgroundColor: "#28A712",
+                    borderRadius: 10,
+                    minWidth: 20,
+                    height: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 5,
+                  }}
+                >
+                  <ThemedText
+                    family="primary"
+                    weight="bold"
+                    style={{ fontSize: 11, color: "#FFFFFF", lineHeight: 14 }}
+                  >
+                    {floatingUnreadCount}
+                  </ThemedText>
+                </View>
+              )}
+              <ThemedText
+                family="primary"
+                weight="medium"
+                style={{ fontSize: 13, color: isDark ? "#E7E7E7" : "#333" }}
+              >
+                ↓ {floatingUnreadCount > 0 ? "New messages" : "Scroll to latest"}
+              </ThemedText>
+            </Pressable>
           )}
 
           {/* Input Bar */}
