@@ -269,12 +269,11 @@ const TradeChat = () => {
     }
   }, []);
 
-  // Moves upwards by an extra 30px clearance as requested
   const animatedContainerStyle = useAnimatedStyle(() => {
     const kh = keyboardHeight.value;
     if (kh > 0) {
       return {
-        paddingBottom: kh + 30,
+        paddingBottom: kh,
       };
     }
     return {
