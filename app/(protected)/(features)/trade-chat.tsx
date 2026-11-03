@@ -971,7 +971,7 @@ const TradeChat = () => {
   // ============================================
   return (
     <BottomSheetModalProvider>
-      <ThemedView className="flex-1" style={{ paddingBottom: insets.bottom }}>
+      <ThemedView className="flex-1">
         <Animated.View style={[{ flex: 1 }, animatedContainerStyle]}>
           {/* Header */}
           <SafeAreaView edges={["top"]} className="bg-background-light dark:bg-background-dark">
