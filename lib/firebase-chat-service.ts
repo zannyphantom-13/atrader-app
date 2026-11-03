@@ -178,6 +178,10 @@ export const createTradeChat = async (
     lastMessageAt: serverTimestamp(),
     lastMessageSender: "system",
     unreadByUser: 0,
+    unreadByCustomer: 0,
+    unreadCount: 0,
+    unread_count: 0,
+    unread: 0,
     unreadByAgent: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -196,8 +200,8 @@ export const createTradeChat = async (
     text: `${chatId.startsWith("support_") ? `Hello ${params.userName}, how may we help you today?` : `Hello ${params.userName} you submitted a trade of a ${params.cardName} gift card and your trade is currently ongoing.`}`,
     imageUrl: null,
     metadata: null,
-    readByUser: false,
-    readByAgent: true,
+    readByUser: true, // Welcome message is not an unread agent message for user
+    readByAgent: false,
   });
 
   // Add to chat queue for agents to pick up

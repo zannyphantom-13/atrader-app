@@ -124,7 +124,7 @@ export const InAppNotificationBanner = () => {
         !chat?.tradeId);
 
     const resolvedCardName =
-      cardName || chat?.cardName || (resolvedIsSupport ? "App Support" : "Gift Card");
+      cardName || chat?.cardName || (resolvedIsSupport ? "Gift Card Support" : "Gift Card");
 
     router.push({
       pathname: "/(protected)/(features)/trade-chat" as any,
@@ -190,26 +190,42 @@ export const InAppNotificationBanner = () => {
         const currentTs = getTs(chatData.lastMessageAt || chatData.updatedAt);
         const prevTs = lastTimestampsRef.current[chatId] ?? 0;
 
-        // Condition to show in-app banner:
-        // 1. Not the very first load (seed initial state)
-        // 2. Either unread count increased OR newer message timestamp arrived
-        // 3. Activity is from an agent/support (not sent by user or closed system notification)
-        // 4. User is NOT currently viewing this exact chat
-        const isFromAgent = chatData.lastMessageSender === "agent" || (chatData as any).senderType === "agent";
+        // STRICT REQUIREMENT: In-app banner ("Atrader Support / 2 new messages")
+        // should ONLY be used by gift card trade / support chat information sent by human agents.
+        // NEVER show banner for welcome notifications, system notifications, or on trade creation!
+        const isFromAgent =
+          chatData.lastMessageSender === "agent" ||
+          (chatData as any).senderType === "agent";
+
+        const isSystem =
+          chatData.lastMessageSender === "system" ||
+          (chatData as any).senderType === "system" ||
+          chatData.lastMessage?.toLowerCase().includes("ongoing") ||
+          chatData.lastMessage?.toLowerCase().includes("submitted a trade") ||
+          chatData.lastMessage?.toLowerCase().includes("welcome");
+
+        const isClosed =
+          chatData.chatStatus === "closed" ||
+          (chatData as any).status === "closed";
+
+        // Must strictly be a gift card trade chat or gift card support chat
+        const isGiftCardOrSupport =
+          Boolean(chatData.tradeId) ||
+          chatData.type === "support" ||
+          chatData.cardCategory === "Support" ||
+          chatData.chatId?.startsWith("support_") ||
+          chatData.chatId?.startsWith("trade_");
+
         const unreadIncreased = newCount > prevCount;
         const hasNewActivity = unreadIncreased || (currentTs > prevTs && currentTs > 0);
-        const isClosedSystemMessage =
-          chatData.chatStatus === "closed" &&
-          (chatData.lastMessage?.toLowerCase().includes("closed") || chatData.lastMessageSender === "system");
-
-        const isAgentActivity =
-          isFromAgent || (unreadIncreased && chatData.lastMessageSender !== "user");
 
         if (
           !isInitialLoadRef.current &&
           hasNewActivity &&
-          isAgentActivity &&
-          !isClosedSystemMessage &&
+          isFromAgent &&
+          !isSystem &&
+          !isClosed &&
+          isGiftCardOrSupport &&
           !isViewingChat(chatId)
         ) {
           const isSupport =
@@ -217,11 +233,16 @@ export const InAppNotificationBanner = () => {
             chatData.chatId?.startsWith("support_") ||
             !chatData.tradeId;
 
+          const cardLabel = chatData.cardName || chatData.cardCategory;
           const title = isSupport
-            ? "App Support"
-            : `Trade Support ~ ${chatData.cardName || "Gift Card"}`;
+            ? "Atrader Support"
+            : (cardLabel ? `Atrader Support — ${cardLabel}` : "Atrader Support");
 
-          const preview = chatData.lastMessage || "New message awaiting you";
+          const isFirst = newCount <= 1;
+          const preview = isFirst
+            ? (chatData.lastMessage || "New message awaiting you")
+            : `${newCount} new messages`;
+
           showBanner({
             name: title,
             text: preview,

@@ -262,11 +262,35 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         const chatId = pushData?.chatId || pushData?.conversationId;
         const isAppInForeground = AppState.currentState === "active";
 
-        // Show In-App Notification banner when foregrounded and not viewing this exact chat
-        if (isAppInForeground && (!chatId || !isViewingChat(chatId))) {
+        // Show In-App Notification banner ONLY for active gift card trade / support chats from agents
+        // NEVER show banner for generic welcome notifications, system broadcasts, or non-chat notifications
+        const isGiftCardTradeOrSupport =
+          Boolean(chatId) &&
+          (Boolean(pushData?.tradeId) ||
+            String(chatId).startsWith("trade_") ||
+            String(chatId).startsWith("support_") ||
+            pushData?.cardCategory === "Support" ||
+            pushData?.type === "support" ||
+            pushData?.type === "trade");
+
+        const isWelcomeNotification =
+          pushData?.type === "welcome" ||
+          pushData?.screen === "welcome" ||
+          String(notification.request.content.title || "").toLowerCase().includes("welcome") ||
+          String(notification.request.content.body || "").toLowerCase().includes("welcome") ||
+          String(pushData?.preview || "").toLowerCase().includes("welcome");
+
+        if (
+          isAppInForeground &&
+          isGiftCardTradeOrSupport &&
+          !isWelcomeNotification &&
+          !isViewingChat(chatId)
+        ) {
+          const isSupport = !pushData?.tradeId || String(chatId).startsWith("support_");
+          const cardLabel = pushData?.cardName || pushData?.cardCategory;
           const notifTitle =
             notification.request.content.title ||
-            (pushData?.cardName ? `Atrader — ${pushData.cardName}` : "Atrader");
+            (isSupport ? "Atrader Support" : (cardLabel ? `Atrader Support — ${cardLabel}` : "Atrader Support"));
           const notifBody =
             notification.request.content.body ||
             pushData?.preview ||
@@ -279,7 +303,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             tradeId: pushData?.tradeId || null,
             cardName: pushData?.cardName || null,
             cardCategory: pushData?.cardCategory || null,
-            isSupport: !pushData?.tradeId || String(chatId).startsWith("support_"),
+            isSupport,
           });
         }
 
@@ -304,7 +328,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             params: {
               chatId,
               tradeId: data.tradeId || "",
-              cardName: data.cardName || (isSupport ? "App Support" : "Gift Card"),
+              cardName: data.cardName || (isSupport ? "Gift Card Support" : "Gift Card"),
               cardCategory: data.cardCategory || (isSupport ? "Support" : ""),
               type: "existing",
               isSupport: isSupport ? "true" : "false",
