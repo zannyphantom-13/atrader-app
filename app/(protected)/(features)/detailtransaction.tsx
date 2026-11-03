@@ -370,7 +370,7 @@ const AllDetailTransaction = () => {
 
     if (normalizedType === 'giftcard') {
       // Navigate to Firebase trade chat (will be connected in Phase 4)
-      router.push({ pathname: '/(protected)/(features)/trade-chat' as any, params: { tradeId: transId, cardName: category || 'Gift Card', cardCategory: category || '', type: 'existing' } });
+      router.push({ pathname: '/(protected)/(features)/trade-chat' as any, params: { tradeId: transId, cardName: category || 'Gift Card', cardCategory: category || '', type: 'new' } });
     } else {
       openChat(department, transId, normalizedType);
     }

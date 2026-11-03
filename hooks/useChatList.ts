@@ -23,10 +23,13 @@ export const useChatList = (userIdProp: string | null): any => {
 
   // Subscribe to user's chat list in realtime using all valid identifiers
   useEffect(() => {
+    const rawIds = [firebaseUid, userIdProp, getAuth().currentUser?.uid];
     const candidateIds = Array.from(
       new Set(
-        [firebaseUid, userIdProp, getAuth().currentUser?.uid]
-          .filter((id): id is string => Boolean(id) && typeof id === "string" && id.trim().length > 0)
+        rawIds
+          .filter((id) => id !== null && id !== undefined && id !== "")
+          .map((id) => String(id).trim())
+          .filter((id) => id.length > 0)
       )
     );
 

@@ -1,4 +1,4 @@
-﻿import { isViewingChat, dismissChatNotification } from "./chat-state";
+import { isViewingChat, dismissChatNotification } from "./chat-state";
 import {
   addDoc,
   collection,
@@ -117,17 +117,21 @@ export const createTradeChat = async (
     const existingChat = await getDoc(chatRef);
     if (existingChat.exists()) {
       console.log("[FirebaseChat] Chat already exists:", chatId);
-      // General app support should ALWAYS remain open
+      // General app support should ALWAYS remain open, and push token must stay fresh
+      const existingUpdates: any = {
+        updatedAt: serverTimestamp(),
+      };
+      if (params.userExpoPushToken) {
+        existingUpdates.userExpoPushToken = params.userExpoPushToken;
+      }
       if (params.chatType === "support" || chatId.startsWith("support_")) {
-        try {
-          await updateDoc(chatRef, {
-            chatStatus: "open",
-            status: "open",
-            updatedAt: serverTimestamp(),
-          });
-        } catch (e) {
-          console.warn("[FirebaseChat] Failed to update support chatStatus to open:", e);
-        }
+        existingUpdates.chatStatus = "open";
+        existingUpdates.status = "open";
+      }
+      try {
+        await updateDoc(chatRef, existingUpdates);
+      } catch (e) {
+        console.warn("[FirebaseChat] Failed to update existing chat:", e);
       }
       return chatId;
     }

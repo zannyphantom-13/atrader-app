@@ -111,12 +111,14 @@ const TradeChat = () => {
   }>();
 
   const resolvedChatId =
-    params.chatId ||
-    (params.tradeId
-      ? params.tradeId.startsWith("trade_") || params.tradeId.startsWith("support_")
-        ? params.tradeId
-        : `trade_${params.tradeId}`
-      : null);
+    params.type === "new"
+      ? null
+      : params.chatId ||
+        (params.tradeId
+          ? params.tradeId.startsWith("trade_") || params.tradeId.startsWith("support_")
+            ? params.tradeId
+            : `trade_${params.tradeId}`
+          : null);
 
   const [chatId, setChatId] = useState<string | null>(resolvedChatId);
   useFocusEffect(
@@ -182,6 +184,15 @@ const TradeChat = () => {
 
   const { messages, chatInfo, isLoading, isSending, isUploading, sendText, sendImage, endChat } =
     useFirebaseChat(chatId, userId, userName, userAvatar || "");
+
+  // Continuously ensure active chat document has customer's current push token
+  useEffect(() => {
+    if (chatId && expoPushToken) {
+      updateChatPushToken(chatId, expoPushToken).catch((err) => {
+        console.warn("[TradeChat] Failed to sync push token:", err);
+      });
+    }
+  }, [chatId, expoPushToken]);
 
   // Create chat on mount if it's a new trade
   useEffect(() => {
@@ -913,7 +924,7 @@ const TradeChat = () => {
                   color: isDark ? "#E7E7E7" : "#0C0C0C",
                 }}
               >
-                {isSupportChat ? "App Support" : "Trade support"}
+                {isSupportChat ? "Gift Card Support" : "Trade support"}
               </ThemedText>
             </View>
           </SafeAreaView>
