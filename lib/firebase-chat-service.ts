@@ -52,6 +52,7 @@ export interface ChatDocument {
   lastMessage: string;
   lastMessageAt: Timestamp | null;
   lastMessageSender: SenderType;
+  senderType?: string;
   unreadByUser?: number;
   unreadByCustomer?: number;
   unreadCount?: number;

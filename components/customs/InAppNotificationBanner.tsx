@@ -15,8 +15,10 @@ import { useAppSelector } from "@/redux/store";
 import {
   subscribeToUserChats,
   getChatUnreadCount,
+  updateChatPushToken,
   type ChatDocument,
 } from "@/lib/firebase-chat-service";
+import { useNotifications } from "@/context/NotificationsProvider";
 import {
   setGlobalActiveChatId,
   getGlobalActiveChatId,
@@ -49,6 +51,7 @@ export const showInAppNotification = (payload: BannerPayload) => {
 
 export const InAppNotificationBanner = () => {
   const router = useRouter();
+  const { expoPushToken } = useNotifications();
   const insets = useSafeAreaInsets();
   const { user } = useAppSelector((state) => state.auth);
   const { user: userInfo } = user || {};
@@ -169,24 +172,33 @@ export const InAppNotificationBanner = () => {
           return 0;
         };
 
-        const currentTs = getTs(chatData.lastMessageAt);
+        // Auto-sync push token to Firestore if available and out-of-date
+        if (expoPushToken && chatData.userExpoPushToken !== expoPushToken) {
+          updateChatPushToken(chatId, expoPushToken).catch(() => {});
+        }
+
+        const currentTs = getTs(chatData.lastMessageAt || chatData.updatedAt);
         const prevTs = lastTimestampsRef.current[chatId] ?? 0;
 
         // Condition to show in-app banner:
         // 1. Not the very first load (seed initial state)
-        // 2. Either unread count increased OR newer message timestamp arrived from an agent
-        // 3. Sender is 'agent' (exclude customer messages and system messages like "This chat has been closed")
+        // 2. Either unread count increased OR newer message timestamp arrived
+        // 3. Activity is from an agent/support (not sent by user or closed system notification)
         // 4. User is NOT currently viewing this exact chat
-        const isFromAgent = chatData.lastMessageSender === "agent";
-        const hasNewActivity = newCount > prevCount || (currentTs > prevTs && currentTs > 0);
+        const isFromAgent = chatData.lastMessageSender === "agent" || (chatData as any).senderType === "agent";
+        const unreadIncreased = newCount > prevCount;
+        const hasNewActivity = unreadIncreased || (currentTs > prevTs && currentTs > 0);
         const isClosedSystemMessage =
           chatData.chatStatus === "closed" &&
           (chatData.lastMessage?.toLowerCase().includes("closed") || chatData.lastMessageSender === "system");
 
+        const isAgentActivity =
+          isFromAgent || (unreadIncreased && chatData.lastMessageSender !== "user");
+
         if (
           !isInitialLoadRef.current &&
           hasNewActivity &&
-          isFromAgent &&
+          isAgentActivity &&
           !isClosedSystemMessage &&
           !isViewingChat(chatId)
         ) {
@@ -199,7 +211,7 @@ export const InAppNotificationBanner = () => {
             ? "App Support"
             : `Trade Support ~ ${chatData.cardName || "Gift Card"}`;
 
-          const preview = chatData.lastMessage || "New message received";
+          const preview = chatData.lastMessage || "New message awaiting you";
           showBanner({
             name: title,
             text: preview,

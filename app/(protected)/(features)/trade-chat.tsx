@@ -136,7 +136,8 @@ const TradeChat = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [showEndChatModal, setShowEndChatModal] = useState(false);
   // Snapshot of how many agent messages were unread when the chat was opened
-  const openUnreadCountRef = useRef<number>(-1); // -1 = not yet seeded
+  const [openUnreadCount, setOpenUnreadCount] = useState<number>(0);
+  const isUnreadSeededRef = useRef<boolean>(false);
   const [isEndingChat, setIsEndingChat] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [visibleImageIndex, setVisibleImageIndex] = useState(0);
@@ -382,13 +383,18 @@ const TradeChat = () => {
     if (!inputText.trim() || isChatClosed) return;
     const text = inputText;
     setInputText("");
+    // User is actively communicating in chat: clear unread counter/divider and sync read state
+    setOpenUnreadCount(0);
+    if (chatId) {
+      markChatReadByUser(chatId).catch(() => {});
+    }
     try {
       await sendText(text);
     } catch (error) {
       setInputText(text); // restore on error
       Alert.alert("Error", "Failed to send message. Please try again.");
     }
-  }, [inputText, sendText, isChatClosed]);
+  }, [inputText, sendText, isChatClosed, chatId]);
 
   const handlePickImage = useCallback(async () => {
     if (isChatClosed) return;
@@ -402,6 +408,10 @@ const TradeChat = () => {
     });
 
     if (!result.canceled && result.assets?.length) {
+      setOpenUnreadCount(0);
+      if (chatId) {
+        markChatReadByUser(chatId).catch(() => {});
+      }
       try {
         for (const asset of result.assets) {
           await sendImage(asset.uri, asset.fileName || undefined);
@@ -410,7 +420,7 @@ const TradeChat = () => {
         Alert.alert("Error", "Failed to send one or more images. Please try again.");
       }
     }
-  }, [sendImage, isChatClosed]);
+  }, [sendImage, isChatClosed, chatId]);
 
   const handleEndChat = useCallback(async () => {
     if (isSupportChat) return; // General app support cannot be ended
@@ -443,13 +453,14 @@ const TradeChat = () => {
 
   // Seed the openUnreadCount from chatInfo on first valid read
   useEffect(() => {
-    if (openUnreadCountRef.current === -1 && chatInfo !== null) {
+    if (!isUnreadSeededRef.current && chatInfo !== null) {
+      isUnreadSeededRef.current = true;
       const raw =
-        (chatInfo as any).unreadByCustomer |
-        (chatInfo as any).unreadByUser |
-        (chatInfo as any).unreadCount |
+        (chatInfo as any).unreadByCustomer ||
+        (chatInfo as any).unreadByUser ||
+        (chatInfo as any).unreadCount ||
         0;
-      openUnreadCountRef.current = Math.max(0, Number(raw) || 0);
+      setOpenUnreadCount(Math.max(0, Number(raw) || 0));
     }
   }, [chatInfo]);
 
@@ -469,7 +480,7 @@ const TradeChat = () => {
   const chronologicalMessages = React.useMemo(() => [...messages].reverse(), [messages]);
   // Index in chronologicalMessages where unread agent messages start
   const unreadStartIndex = React.useMemo(() => {
-    const count = openUnreadCountRef.current;
+    const count = openUnreadCount;
     if (count <= 0) return -1;
     // Count agent (non-system, non-user) messages from the END (newest)
     let agentSeen = 0;
@@ -481,7 +492,7 @@ const TradeChat = () => {
       }
     }
     return -1;
-  }, [chronologicalMessages, openUnreadCountRef.current]);
+  }, [chronologicalMessages, openUnreadCount]);
 
   const imageMessages = React.useMemo(() => {
     return chronologicalMessages.filter(msg => msg.type === "image" && msg.imageUrl);
@@ -535,7 +546,7 @@ const TradeChat = () => {
             paddingHorizontal: 6,
           }}
         >
-          {openUnreadCountRef.current} unread {openUnreadCountRef.current === 1 ? "message" : "messages"}
+          {openUnreadCount} unread {openUnreadCount === 1 ? "message" : "messages"}
         </ThemedText>
         <View style={{ flex: 1, height: 1, backgroundColor: "#28A712", opacity: 0.4 }} />
       </View>
