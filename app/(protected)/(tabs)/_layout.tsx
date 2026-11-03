@@ -21,8 +21,8 @@ const TabsLayout = () => {
   const { user, selectedAvatarId } = useAppSelector((state) => state.auth);
   const insets = useSafeAreaInsets();
   const baseBottomPadding = insets.bottom > 0 ? Math.min(insets.bottom, 14) : 6;
-  const bottomPadding = baseBottomPadding + 12;
-  const tabHeight = (Platform.OS === "ios" ? 54 + insets.bottom : 58 + baseBottomPadding) + 12;
+  const bottomPadding = baseBottomPadding + 20;
+  const tabHeight = (Platform.OS === "ios" ? 54 + insets.bottom : 58 + baseBottomPadding) + 20;
   const { user: userInfo } = user || {};
   const currentAuthUid = getAuth().currentUser?.uid;
   const userId = currentAuthUid || (userInfo?.email ? String(userInfo.email) : "") || (userInfo?.id ? String(userInfo.id) : "");

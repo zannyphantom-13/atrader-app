@@ -60,3 +60,4 @@ export const markMessageProcessed = (messageId: string | null | undefined): void
   }
   processedMessageIds.add(messageId);
 };
+
