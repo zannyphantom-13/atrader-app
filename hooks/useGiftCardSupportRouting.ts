@@ -9,6 +9,8 @@ import {
 import { useNotifications } from "@/context/NotificationsProvider";
 import { useAppSelector } from "@/redux/store";
 import { getAuth } from "firebase/auth";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 /**
  * Custom routing hook for Gift Card Support session lifecycle management:
@@ -43,7 +45,22 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
 
     try {
       // 1. Unassigned State Check: evaluate existing active support threads
-      const unassignedThread = findActiveUnassignedSupportChat(chats);
+      let unassignedThread = findActiveUnassignedSupportChat(chats);
+
+      // Cold launch or unhydrated snapshot guard: if not found and list is empty/loading, query Firestore directly
+      if (!unassignedThread && (isLoading || chats.length === 0)) {
+        try {
+          const chatsQuery = query(
+            collection(db, "chats"),
+            where("userId", "==", effectiveUserId)
+          );
+          const snap = await getDocs(chatsQuery);
+          const fetchedChats = snap.docs.map((d) => d.data() as ChatDocument);
+          unassignedThread = findActiveUnassignedSupportChat(fetchedChats);
+        } catch (fetchErr) {
+          console.warn("[GiftCardSupportRouting] Direct query fallback error:", fetchErr);
+        }
+      }
 
       if (unassignedThread) {
         console.log(
