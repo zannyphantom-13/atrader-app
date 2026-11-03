@@ -213,7 +213,7 @@ const TradeChat = () => {
   // Handle Android Soft Input Mode
   useEffect(() => {
     if (Platform.OS === "android") {
-      KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_RESIZE);
+      KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_PAN);
       return () => {
         // Restore default on unmount
         KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_RESIZE);
@@ -822,7 +822,7 @@ const TradeChat = () => {
     <BottomSheetModalProvider>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={0}
       >
       <ThemedView className="flex-1">
