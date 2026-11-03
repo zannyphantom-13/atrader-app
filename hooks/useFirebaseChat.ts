@@ -20,6 +20,7 @@ interface UseFirebaseChatReturn {
   sendText: (text: string) => Promise<void>;
   sendImage: (imageUri: string, fileName?: string) => Promise<void>;
   endChat: () => Promise<void>;
+  markAllAsRead: () => Promise<void>;
 }
 
 export const useFirebaseChat = (
@@ -85,11 +86,52 @@ export const useFirebaseChat = (
     }
   }, [chatId, isAuthReady]);
 
+  const markAllAsRead = useCallback(async () => {
+    if (!chatId) return;
+    setChatInfo((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        unreadByUser: 0,
+        unreadByCustomer: 0,
+        unreadCount: 0,
+        unread_count: 0,
+        unread: 0,
+      };
+    });
+    setMessages((prev) =>
+      prev.map((m) => (m.readByUser ? m : { ...m, readByUser: true }))
+    );
+    try {
+      await markChatReadByUser(chatId);
+    } catch (err) {
+      console.warn('[useFirebaseChat] markAllAsRead error:', err);
+    }
+  }, [chatId]);
+
   const sendText = useCallback(async (text: string) => {
     if (!chatId || !text.trim()) return;
     setIsSending(true);
+
+    // Optimistically reset unread counter to 0 and mark messages read immediately
+    setChatInfo((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        unreadByUser: 0,
+        unreadByCustomer: 0,
+        unreadCount: 0,
+        unread_count: 0,
+        unread: 0,
+      };
+    });
+    setMessages((prev) =>
+      prev.map((m) => (m.readByUser ? m : { ...m, readByUser: true }))
+    );
+
     try {
       await sendUserMessage(chatId, userId, userName, userAvatar, text.trim());
+      await markChatReadByUser(chatId);
     } catch (error) {
       console.error('[useFirebaseChat] Failed to send message:', error);
       throw error;
@@ -101,8 +143,26 @@ export const useFirebaseChat = (
   const sendImage = useCallback(async (imageUri: string, fileName?: string) => {
     if (!chatId) return;
     setIsUploading(true);
+
+    // Optimistically reset unread counter to 0 and mark messages read immediately
+    setChatInfo((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        unreadByUser: 0,
+        unreadByCustomer: 0,
+        unreadCount: 0,
+        unread_count: 0,
+        unread: 0,
+      };
+    });
+    setMessages((prev) =>
+      prev.map((m) => (m.readByUser ? m : { ...m, readByUser: true }))
+    );
+
     try {
       await sendImageMessage(chatId, userId, userName, userAvatar, imageUri, fileName);
+      await markChatReadByUser(chatId);
     } catch (error) {
       console.error('[useFirebaseChat] Failed to send image:', error);
       throw error;
@@ -130,5 +190,6 @@ export const useFirebaseChat = (
     sendText,
     sendImage,
     endChat,
+    markAllAsRead,
   };
 };

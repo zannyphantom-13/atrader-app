@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   orderBy,
@@ -13,6 +14,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
   type Unsubscribe,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -280,6 +282,9 @@ export const sendMessage = async (
     updateData.unreadByCustomer = 0;
     updateData.unreadCount = 0;
     updateData.unread_count = 0;
+    updateData.unread = 0;
+    // Asynchronously mark all existing unread messages in backend as read by user
+    markAllMessagesReadByUser(chatId).catch(() => {});
   } else if (messageData.senderType === "agent") {
     // Only increment customer count if customer is NOT currently viewing this chat
     if (!isViewingChat(chatId)) {
@@ -481,6 +486,33 @@ export const subscribeToUserChats = (
 /**
  * Mark all messages in a chat as read by user
  */
+/**
+ * Mark all individual message documents in a chat as read by the user
+ */
+export const markAllMessagesReadByUser = async (chatId: string): Promise<void> => {
+  if (!chatId) return;
+  try {
+    const messagesRef = collection(
+      db,
+      CHATS_COLLECTION,
+      chatId,
+      MESSAGES_SUBCOLLECTION
+    );
+    const q = query(messagesRef, where("readByUser", "==", false));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const batch = writeBatch(db);
+      snap.docs.forEach((docSnap) => {
+        batch.update(docSnap.ref, { readByUser: true });
+      });
+      await batch.commit();
+      console.log(`[FirebaseChat] Marked ${snap.size} unread messages read by user in ${chatId}`);
+    }
+  } catch (err) {
+    console.warn("[FirebaseChat] markAllMessagesReadByUser error:", err);
+  }
+};
+
 export const markChatReadByUser = async (chatId: string): Promise<void> => {
   if (!chatId) return;
   // Dismiss any system tray notification for this conversation
@@ -498,6 +530,8 @@ export const markChatReadByUser = async (chatId: string): Promise<void> => {
   } catch (err) {
     console.warn("[FirebaseChat] markChatReadByUser error:", err);
   }
+  // Ensure individual message records are also marked read
+  await markAllMessagesReadByUser(chatId);
 };
 
 /**

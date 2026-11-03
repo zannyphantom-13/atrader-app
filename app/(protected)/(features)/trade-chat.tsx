@@ -134,12 +134,17 @@ const TradeChat = () => {
     }, [chatId])
   );
 
+  useEffect(() => {
+    hasInitialScrolledRef.current = false;
+  }, [chatId]);
+
   const [inputText, setInputText] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [showEndChatModal, setShowEndChatModal] = useState(false);
   // Snapshot of how many agent messages were unread when the chat was opened
   const [openUnreadCount, setOpenUnreadCount] = useState<number>(0);
   const isUnreadSeededRef = useRef<boolean>(false);
+  const hasInitialScrolledRef = useRef<boolean>(false);
   // Scroll-position tracking for unread counter behaviour (Section 3)
   const BOTTOM_THRESHOLD = 150; // px from bottom to be considered "near bottom"
   const isNearBottomRef = useRef<boolean>(true); // inverted list starts at bottom
@@ -182,7 +187,7 @@ const TradeChat = () => {
     fetchDetailedTransaction();
   }, [params.tradeId, params.chatId, params.isSupport]);
 
-  const { messages, chatInfo, isLoading, isSending, isUploading, sendText, sendImage, endChat } =
+  const { messages, chatInfo, isLoading, isSending, isUploading, sendText, sendImage, endChat, markAllAsRead } =
     useFirebaseChat(chatId, userId, userName, userAvatar || "");
 
   // Continuously ensure active chat document has customer's current push token
@@ -406,15 +411,20 @@ const TradeChat = () => {
     if (!inputText.trim() || isChatClosed) return;
     const text = inputText;
     setInputText("");
-    // User is actively communicating: scroll to bottom, clear unread divider
+    // Instantly reset unread counters in local state & clear unread divider
+    setOpenUnreadCount(0);
+    setFloatingUnreadCount(0);
     scrollToBottom();
     try {
       await sendText(text);
+      if (chatId) {
+        markChatReadByUser(chatId).catch(() => {});
+      }
     } catch (error) {
       setInputText(text); // restore on error
       Alert.alert("Error", "Failed to send message. Please try again.");
     }
-  }, [inputText, sendText, isChatClosed, scrollToBottom]);
+  }, [inputText, sendText, isChatClosed, scrollToBottom, chatId]);
 
   const handlePickImage = useCallback(async () => {
     if (isChatClosed) return;
@@ -428,16 +438,21 @@ const TradeChat = () => {
     });
 
     if (!result.canceled && result.assets?.length) {
+      setOpenUnreadCount(0);
+      setFloatingUnreadCount(0);
       scrollToBottom();
       try {
         for (const asset of result.assets) {
           await sendImage(asset.uri, asset.fileName || undefined);
         }
+        if (chatId) {
+          markChatReadByUser(chatId).catch(() => {});
+        }
       } catch (error) {
         Alert.alert("Error", "Failed to send one or more images. Please try again.");
       }
     }
-  }, [sendImage, isChatClosed, scrollToBottom]);
+  }, [sendImage, isChatClosed, scrollToBottom, chatId]);
 
   const handleEndChat = useCallback(async () => {
     if (isSupportChat) return; // General app support cannot be ended
@@ -495,21 +510,63 @@ const TradeChat = () => {
   // Render Message Bubble
   // ============================================
   const chronologicalMessages = React.useMemo(() => [...messages].reverse(), [messages]);
-  // Index in chronologicalMessages where unread agent messages start
-  const unreadStartIndex = React.useMemo(() => {
-    const count = openUnreadCount;
-    if (count <= 0) return -1;
-    // Count agent (non-system, non-user) messages from the END (newest)
-    let agentSeen = 0;
-    for (let i = chronologicalMessages.length - 1; i >= 0; i--) {
+  // Index in chronologicalMessages (inverted: 0 is newest, length-1 is oldest) where unread agent messages start
+  const firstUnreadIndex = React.useMemo(() => {
+    if (!chronologicalMessages.length) return -1;
+
+    // Check individual message readByUser status: the first unread in the stream is the oldest unread (highest index in inverted list)
+    let maxUnreadIdx = -1;
+    for (let i = 0; i < chronologicalMessages.length; i++) {
       const m = chronologicalMessages[i];
-      if (m.senderType !== "user" && !isSystemMessage(m)) {
-        agentSeen++;
-        if (agentSeen === count) return i;
+      if (m.senderType !== "user" && !isSystemMessage(m) && m.readByUser === false) {
+        maxUnreadIdx = i;
       }
     }
+    if (maxUnreadIdx !== -1) return maxUnreadIdx;
+
+    // Fallback to openUnreadCount
+    if (openUnreadCount > 0) {
+      let agentCount = 0;
+      let targetIdx = -1;
+      for (let i = 0; i < chronologicalMessages.length; i++) {
+        const m = chronologicalMessages[i];
+        if (m.senderType !== "user" && !isSystemMessage(m)) {
+          agentCount++;
+          targetIdx = i;
+          if (agentCount >= openUnreadCount) break;
+        }
+      }
+      return targetIdx;
+    }
+
     return -1;
   }, [chronologicalMessages, openUnreadCount]);
+
+  // Initial scroll-into-view handler: triggers on component mount or data fetch completion
+  useEffect(() => {
+    if (isLoading || isCreating || chronologicalMessages.length === 0) return;
+    if (hasInitialScrolledRef.current) return;
+
+    hasInitialScrolledRef.current = true;
+
+    const timer = setTimeout(() => {
+      if (firstUnreadIndex > 0 && firstUnreadIndex < chronologicalMessages.length) {
+        try {
+          flatListRef.current?.scrollToIndex({
+            index: firstUnreadIndex,
+            animated: false,
+            viewPosition: 0.5,
+          });
+        } catch {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        }
+      } else {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      }
+    }, 120);
+
+    return () => clearTimeout(timer);
+  }, [isLoading, isCreating, chronologicalMessages.length, firstUnreadIndex]);
 
   const imageMessages = React.useMemo(() => {
     return chronologicalMessages.filter(msg => msg.type === "image" && msg.imageUrl);
@@ -576,13 +633,20 @@ const TradeChat = () => {
     const isSystem = isSystemMessage(item);
     const isUser = item.senderType === "user";
 
-    // Unread divider: appears above the first unread agent message
-    const flatUnreadStart = unreadStartIndex >= 0
-      ? (chronologicalMessages.length - 1) - unreadStartIndex
-      : -1;
-    const showDivider = flatUnreadStart >= 0 && index === flatUnreadStart;
-    const isUnreadMessage = flatUnreadStart >= 0 && index <= flatUnreadStart
-      && item.senderType !== "user" && !isSystemMessage(item);
+    // Unread divider: appears above the first unread agent message in the stream
+    const showDivider = firstUnreadIndex >= 0 && index === firstUnreadIndex;
+    const isUnreadMessage =
+      firstUnreadIndex >= 0 &&
+      index <= firstUnreadIndex &&
+      item.senderType !== "user" &&
+      !isSystemMessage(item);
+
+    const unreadCountDisplay =
+      openUnreadCount > 0
+        ? openUnreadCount
+        : firstUnreadIndex >= 0
+          ? firstUnreadIndex + 1
+          : 0;
 
     const dividerEl = showDivider ? (
       <View
@@ -606,7 +670,7 @@ const TradeChat = () => {
             paddingHorizontal: 6,
           }}
         >
-          {openUnreadCount} unread {openUnreadCount === 1 ? "message" : "messages"}
+          {unreadCountDisplay} unread {unreadCountDisplay === 1 ? "message" : "messages"}
         </ThemedText>
         <View style={{ flex: 1, height: 1, backgroundColor: "#28A712", opacity: 0.4 }} />
       </View>
@@ -1083,9 +1147,25 @@ const TradeChat = () => {
                 paddingTop: 10, // Added for inverted list top (which is visual bottom)
                 flexGrow: 1
               }}
+              initialNumToRender={Math.max(20, (firstUnreadIndex >= 0 ? firstUnreadIndex + 5 : 20))}
+              maxToRenderPerBatch={20}
+              windowSize={11}
               showsVerticalScrollIndicator={false}
               onScroll={handleScroll}
               scrollEventThrottle={100}
+              onScrollToIndexFailed={(info) => {
+                setTimeout(() => {
+                  try {
+                    flatListRef.current?.scrollToIndex({
+                      index: info.index,
+                      animated: false,
+                      viewPosition: 0.5,
+                    });
+                  } catch {
+                    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+                  }
+                }, 100);
+              }}
             />
           )}
 
