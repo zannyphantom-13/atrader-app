@@ -7,7 +7,7 @@ import { useToast } from "@/context/ToastProvider";
 import { openChat } from "@/lib/zoho-service";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
-import { createTradeChat } from "@/lib/firebase-chat-service";
+import { openAppSupport } from "@/lib/zoho-service";
 import { useAppSelector } from "@/redux/store";
 import * as Clipboard from "expo-clipboard";
 import { ChevronRight } from "lucide-react-native";
@@ -158,38 +158,12 @@ const Support = () => {
         >
           {/* Support Options */}
           <Pressable
-            onPress={async () => {
-              try {
-                const uid = getAuth().currentUser?.uid || user?.id || "";
-                if (uid) {
-                  await createTradeChat({
-                    tradeId: "",
-                    userId: uid,
-                    userName: userInfo?.name || userInfo?.username || "User",
-                    userAvatar: userInfo?.profile_picture || null,
-                    cardName: "App Support",
-                    cardCategory: "Support",
-                    cardAmount: "",
-                    settlementAmount: "",
-                    chatType: "support",
-                  });
-                  router.push({
-                    pathname: "/(protected)/(features)/trade-chat" as any,
-                    params: {
-                      chatId: `support_${uid}`,
-                      tradeId: "",
-                      cardName: "App Support",
-                      cardCategory: "Support",
-                      type: "existing",
-                      isSupport: "true",
-                    },
-                  });
-                } else {
-                  openChat("App Support");
-                }
-              } catch (e) {
-                openChat("App Support");
-              }
+            onPress={() => {
+              openAppSupport({
+                id: user?.id ? String(user.id) : undefined,
+                email: userInfo?.email,
+                name: userInfo?.name || userInfo?.username,
+              });
             }}
             className="flex-row items-center justify-between p-3 bg-[#E8FFE433] dark:bg-[#171717] border border-[#28a712a7] dark:border-[#232323] rounded-[24px] mb-2"
           >

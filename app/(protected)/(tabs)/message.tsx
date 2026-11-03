@@ -7,7 +7,8 @@ import { useNotifications } from "@/context/NotificationsProvider";
 import { useTheme } from "@/context/ThemeProvider";
 import { useChatList } from "@/hooks/useChatList";
 import { createTradeChat } from "@/lib/firebase-chat-service";
-import { openChat } from "@/lib/zoho-service";
+import { openAppSupport, openChat } from "@/lib/zoho-service";
+import { useGiftCardSupportRouting } from "@/hooks/useGiftCardSupportRouting";
 import { useAppSelector } from "@/redux/store";
 import app_colors from "@/styles/color";
 import { useRouter } from "expo-router";
@@ -78,40 +79,25 @@ const SupportChatScreen = () => {
     [router]
   );
 
-  // Handle Gift Card Issues from modal
-  // Handle Gift Card Issues from modal
+  // Gift Card Support routing hook: checks unassigned active thread vs assigned state
+  const { routeGiftCardSupport, isNavigating: isRoutingSupport } =
+    useGiftCardSupportRouting(userId);
+
+  // Handle Gift Card Issues from modal: uses session lifecycle logic
   const handleGiftCardIssue = useCallback(async () => {
-    if (!user) return;
     setShowChatTypeModal(false);
-    setIsCreating(true);
+    await routeGiftCardSupport();
+  }, [routeGiftCardSupport]);
 
-    try {
-      // Use a stable ID for general support so it's a single continuous thread
-      const chatId = await createTradeChat({
-        tradeId: "", // Not a trade
-        userId: getAuth().currentUser?.uid || user.id || "",
-        userName: userInfo?.name || userInfo?.username || "User",
-        userAvatar: userInfo?.profile_picture || null,
-        userExpoPushToken: expoPushToken,
-        cardName: "",
-        cardCategory: "Support",
-        cardAmount: "",
-        settlementAmount: "",
-        chatType: "support",
-      });
-
-      handleOpenChat(chatId, "General Support", null);
-    } catch (error) {
-      console.error("Failed to create support chat:", error);
-    } finally {
-      setIsCreating(false);
-    }
-  }, [user, expoPushToken, handleOpenChat]);
-
-  // Handle App Support from modal → open Zoho
+  // Handle App Support from modal: independent Zoho AI sales-managing support flow
   const handleAppSupport = useCallback(() => {
-    openChat("App Support");
-  }, []);
+    setShowChatTypeModal(false);
+    openAppSupport({
+      id: userId,
+      email: userInfo?.email,
+      name: userInfo?.name || userInfo?.username,
+    });
+  }, [userId, userInfo]);
 
   const renderChatItem = ({ item }: { item: any }) => {
     const isAppSupport = item.type === "support" && !item.tradeId;
@@ -208,7 +194,7 @@ const SupportChatScreen = () => {
   // Static App Support item at the top
   const renderHeader = () => (
     <Pressable
-      onPress={() => openChat("App Support")}
+      onPress={() => openAppSupport({ id: userId, email: userInfo?.email, name: userInfo?.name || userInfo?.username })}
       className="flex-row items-center px-5 py-4"
       style={{
         borderBottomWidth: 0.5,

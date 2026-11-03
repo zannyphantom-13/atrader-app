@@ -301,12 +301,8 @@ export const openChat = async (department?: string, transactionId?: string, tran
     let message = "";
     let customChatId = null;
 
-    if (transactionType?.toLowerCase() === "giftcard" && transactionId) {
-      const typeLabels: Record<string, string> = {
-        giftcard: "Gift Card Trade",
-      };
-      const label = typeLabels[transactionType.toLowerCase()] || "Gift Card Trade";
-      message = `${label} Support - Transaction ID: ${transactionId}`;
+    // Dedicated transaction context
+    if (transactionId) {
       customChatId = transactionId;
     }
 
@@ -407,3 +403,62 @@ export const useZohoChatVisibility = () => {
 
 
 
+
+export interface AppSupportUserContext {
+  id?: string | number;
+  email?: string;
+  name?: string;
+}
+
+/**
+ * Dedicated, independent session handler for App Support.
+ * Reconnects directly to the Zoho AI automated support flow (sales-managing AI engine / Zobot).
+ * Completely decoupled and isolated from manual human-agent ticket queues and Gift Card routing.
+ */
+export const openAppSupport = async (userContext?: AppSupportUserContext) => {
+  if (!isZohoLinked) {
+    console.log("[ZohoService] Zoho Chat is unavailable in this environment (running without native Zoho module).");
+    return;
+  }
+  try {
+    console.log("[ZohoService] Initiating dedicated App Support AI session...");
+
+    // 1. Identify visitor with Zoho AI sales engine if user context is available
+    if (userContext) {
+      const visitorId = userContext.id ? String(userContext.id) : (userContext.email || "");
+      if (visitorId) {
+        setZohoVisitor(visitorId, userContext.email, userContext.name);
+      }
+    }
+
+    // 2. Direct session to the App Support AI sales-managing engine department
+    if (ZohoSalesIQ && typeof ZohoSalesIQ.setDepartment === "function") {
+      try {
+        ZohoSalesIQ.setDepartment("App Support");
+      } catch (deptErr) {
+        console.warn("[ZohoService] setDepartment warning:", deptErr);
+      }
+    }
+
+    // 3. Launch the automated AI support session
+    if (ZohoSalesIQ?.Chat && typeof ZohoSalesIQ.Chat.startWithTrigger === "function") {
+      ZohoSalesIQ.Chat.startWithTrigger(null, "App Support", (error, chat) => {
+        if (error) {
+          console.log("[ZohoService] Chat.startWithTrigger fallback to openChat:", error);
+          ZohoSalesIQ.openChat();
+        } else {
+          console.log("[ZohoService] Zoho AI session started successfully:", JSON.stringify(chat));
+        }
+      });
+    } else {
+      ZohoSalesIQ.openChat();
+    }
+  } catch (error) {
+    console.error("[ZohoService] Failed to open App Support session:", error);
+    try {
+      ZohoSalesIQ.openChat();
+    } catch (fallbackErr) {
+      console.error("[ZohoService] Fallback openChat failed:", fallbackErr);
+    }
+  }
+};

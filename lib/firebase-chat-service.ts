@@ -79,6 +79,7 @@ export interface MessageDocument {
 }
 
 export interface CreateChatParams {
+  chatId?: string;
   tradeId: string;
   userId: string;
   userName: string;
@@ -107,9 +108,10 @@ export const createTradeChat = async (
   params: CreateChatParams,
 ): Promise<string> => {
   const chatId =
-    params.chatType === "support"
-      ? `support_${params.userId}`
-      : `trade_${params.tradeId}`;
+    params.chatId ||
+    (params.chatType === "support"
+      ? `support_${params.userId}_${Date.now()}`
+      : `trade_${params.tradeId}`);
 
   // Check if chat already exists
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
@@ -189,7 +191,7 @@ export const createTradeChat = async (
     senderAvatar: null,
     senderType: "system",
     type: "text",
-    text: `${chatId === `support_${params.userId}` ? `Hello ${params.userName}, how may we help you today?` : `Hello ${params.userName} you submitted a trade of a ${params.cardName} gift card and your trade is currently ongoing.`}`,
+    text: `${chatId.startsWith("support_") ? `Hello ${params.userName}, how may we help you today?` : `Hello ${params.userName} you submitted a trade of a ${params.cardName} gift card and your trade is currently ongoing.`}`,
     imageUrl: null,
     metadata: null,
     readByUser: false,
@@ -622,3 +624,32 @@ export function setupChatStreamWithoutHeartbeat(url: string) {
   return ws;
 }
 
+
+/**
+ * Accurately evaluates whether a user has an active, unassigned support thread.
+ * An active unassigned thread is open and has no assigned agent (assignedAgent, assignedAgentName, assignedTo).
+ */
+export const findActiveUnassignedSupportChat = (
+  chats: ChatDocument[],
+): ChatDocument | null => {
+  if (!Array.isArray(chats)) return null;
+  return (
+    chats.find((c) => {
+      const isSupport =
+        c.type === "support" ||
+        c.cardCategory === "Support" ||
+        Boolean(c.chatId?.startsWith("support_"));
+      if (!isSupport) return false;
+      const isClosed =
+        c.chatStatus === "closed" ||
+        (c as any).status === "closed" ||
+        (c as any).status === "resolved" ||
+        (c as any).tradeStatus === "closed";
+      if (isClosed) return false;
+      const hasAgent = Boolean(
+        c.assignedAgent || c.assignedAgentName || (c as any).assignedTo,
+      );
+      return !hasAgent;
+    }) || null
+  );
+};
