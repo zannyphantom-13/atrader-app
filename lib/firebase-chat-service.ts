@@ -1,4 +1,4 @@
-﻿import { isViewingChat, dismissChatNotification } from "./chat-state";
+import { isViewingChat, dismissChatNotification } from "./chat-state";
 import {
   addDoc,
   collection,
@@ -193,7 +193,7 @@ export const createTradeChat = async (
   // Add initial system message
   await sendMessage(chatId, {
     senderId: "system",
-    senderName: "ATrader customer support",
+    senderName: "Atrader customer support",
     senderAvatar: null,
     senderType: "system",
     type: "text",
@@ -585,7 +585,7 @@ export const closeChat = async (chatId: string): Promise<void> => {
   // Add system message
   await sendMessage(chatId, {
     senderId: "system",
-    senderName: "ATrader customer support",
+    senderName: "Atrader customer support",
     senderAvatar: null,
     senderType: "system",
     type: "text",
@@ -612,7 +612,7 @@ export const reopenChat = async (chatId: string): Promise<void> => {
   // Add system message
   await sendMessage(chatId, {
     senderId: "system",
-    senderName: "ATrader customer support",
+    senderName: "Atrader customer support",
     senderAvatar: null,
     senderType: "system",
     type: "text",

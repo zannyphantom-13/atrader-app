@@ -1560,7 +1560,7 @@ const TradeChat = () => {
 
               >
 
-                ATrader customer support
+                Atrader customer support
 
               </ThemedText>
 
@@ -2332,7 +2332,7 @@ const TradeChat = () => {
 
             >
 
-              {"This chat is encrypted between you and customer support\nand it has no data hisotry"}
+              {"This chat is encrypted between you and customer support\nand it has no data history"}
 
             </ThemedText>
 

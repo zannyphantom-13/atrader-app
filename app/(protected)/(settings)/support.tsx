@@ -121,7 +121,7 @@ const Support = () => {
   };
 
   const whatsappNumber = profile?.app_whatsapp || "+2349025730919";
-  const emailAddress = profile?.app_email || "ATrader@info.com";
+  const emailAddress = profile?.app_email || "Atrader@info.com";
   const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, "")}`;
   const emailUrl = `mailto:${emailAddress}`;
 
