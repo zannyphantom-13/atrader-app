@@ -14,11 +14,11 @@ import { db } from "@/lib/firebase";
 
 /**
  * Custom routing hook for Gift Card Support session lifecycle management:
- * 
+ *
  * - Unassigned State: Evaluates active session state. If an existing active, unassigned
  *   support thread is found, routes the user back to that existing thread view without
  *   spawning a new chat.
- * 
+ *
  * - Assigned / Active Agent State: If the previous thread has an assigned agent (or if
  *   no active support session exists), clicking "Gift Card Issue" instantiates a new
  *   Gift Card Issue support request and registers it with the queue.
@@ -29,6 +29,8 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
   const { user: userInfo } = user || {};
   const { expoPushToken } = useNotifications();
   const [isNavigating, setIsNavigating] = useState(false);
+  // Synchronous lock — never released mid-navigation to prevent race conditions.
+  // Reset happens after a timeout post-navigation so rapid double-taps are blocked.
   const isNavigatingRef = useRef(false);
 
   const effectiveUserId =
@@ -55,13 +57,16 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
       const rawCandidateIds = [userIdProp, effectiveUserId, authUid, infoIdStr].filter(Boolean) as string[];
       const candidateIds = Array.from(new Set(rawCandidateIds.map((s) => String(s).trim()))).filter((s) => s.length > 0);
 
-      // Always verify directly against Firestore if unassigned thread was not in local snapshot
+      // Always verify directly against Firestore if unassigned thread was not in local snapshot.
+      // This catches cases where the local useChatList snapshot hasn't refreshed yet.
       if (!unassignedThread && candidateIds.length > 0) {
         try {
           const chatsRef = collection(db, "chats");
-          const chatsQuery = candidateIds.length === 1
-            ? query(chatsRef, where("userId", "==", candidateIds[0]))
-            : query(chatsRef, where("userId", "in", candidateIds.slice(0, 10)));
+          // Query up to 10 candidate IDs (Firestore "in" limit)
+          const chatsQuery =
+            candidateIds.length === 1
+              ? query(chatsRef, where("userId", "==", candidateIds[0]))
+              : query(chatsRef, where("userId", "in", candidateIds.slice(0, 10)));
           const snap = await getDocs(chatsQuery);
           const fetchedChats = snap.docs.map((d) => ({
             ...d.data(),
@@ -127,10 +132,17 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
       return createdChatId;
     } catch (error) {
       console.error("[GiftCardSupportRouting] Routing error:", error);
+      // Only release lock on error so the user can try again
+      isNavigatingRef.current = false;
+      setIsNavigating(false);
       return null;
     } finally {
-      setIsNavigating(false);
-      isNavigatingRef.current = false;
+      // On success: keep isNavigating true for 4 s to block rapid re-taps while navigation animates.
+      // isNavigatingRef is NOT reset here on success path — that is handled by the timeout below.
+      setTimeout(() => {
+        isNavigatingRef.current = false;
+        setIsNavigating(false);
+      }, 4000);
     }
   }, [effectiveUserId, chats, userInfo, expoPushToken, router, userIdProp]);
 

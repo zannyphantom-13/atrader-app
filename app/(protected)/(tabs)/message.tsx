@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
 import { MessageSquare } from "lucide-react-native";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   FlatList,
   Image,
@@ -83,11 +83,24 @@ const SupportChatScreen = () => {
   const { routeGiftCardSupport, isNavigating: isRoutingSupport } =
     useGiftCardSupportRouting(userId);
 
+  // Extra ref-based guard to block double-tap / concurrent calls at the UI level
+  const giftCardLockRef = useRef(false);
+
   // Handle Gift Card Issues from modal: uses session lifecycle logic
   const handleGiftCardIssue = useCallback(async () => {
+    // Synchronous guard: block if already navigating (hook-level or ref-level)
+    if (giftCardLockRef.current || isRoutingSupport) return;
+    giftCardLockRef.current = true;
     setShowChatTypeModal(false);
-    await routeGiftCardSupport();
-  }, [routeGiftCardSupport]);
+    try {
+      await routeGiftCardSupport();
+    } finally {
+      // Keep lock for 3 s to prevent rapid re-open after navigation starts
+      setTimeout(() => {
+        giftCardLockRef.current = false;
+      }, 3000);
+    }
+  }, [routeGiftCardSupport, isRoutingSupport]);
 
   // Handle App Support from modal: independent Zoho AI sales-managing support flow
   const handleAppSupport = useCallback(() => {
@@ -113,19 +126,32 @@ const SupportChatScreen = () => {
       item.status === "reject" ||
       item.tradeStatus === "rejected";
 
-    // Privacy & Security: Do not expose raw message content for Gift Support & Trade Support
-    let subtitle = "New - Message awaiting you";
-    let isHighlighted = isUnread;
+    // Privacy & Security: NEVER expose raw message content for Gift/Trade Support chats.
+    // Always show a masked preview; green-highlight + badge when unread.
+    let subtitle: string;
+    let isHighlighted: boolean;
 
     if (isClosed) {
       subtitle = "This chat has been closed.";
       isHighlighted = false;
-    } else if (isUnread || item.lastMessageSender === "agent") {
+    } else if (isUnread) {
+      // Unread messages (from agent or otherwise) — always highlight green
       subtitle = "New - Message awaiting you";
+      isHighlighted = true;
+    } else if (item.lastMessageSender === "agent") {
+      // Agent sent the last message but user has already seen it
+      subtitle = "New - Message awaiting you";
+      isHighlighted = false;
     } else if (item.lastMessageSender === "user") {
+      // User sent the last message — no unread
       subtitle = "Message sent";
+      isHighlighted = false;
     } else if (!item.lastMessage) {
       subtitle = "No messages yet";
+      isHighlighted = false;
+    } else {
+      // Fallback: mask any other raw content
+      subtitle = "New - Message awaiting you";
       isHighlighted = false;
     }
 
@@ -320,6 +346,7 @@ const SupportChatScreen = () => {
           onClose={() => setShowChatTypeModal(false)}
           onSelectGiftCard={handleGiftCardIssue}
           onSelectAppSupport={handleAppSupport}
+          isSubmitting={isRoutingSupport}
         />
       </SafeAreaView>
     </ThemedView>
