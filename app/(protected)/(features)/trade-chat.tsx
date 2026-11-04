@@ -311,6 +311,8 @@ const TradeChat = () => {
 
   const [inputBarHeight, setInputBarHeight] = useState<number>(76);
 
+  const [tradeBarHeight, setTradeBarHeight] = useState<number>(0);
+
   const [isEndingChat, setIsEndingChat] = useState(false);
 
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
@@ -728,126 +730,51 @@ const TradeChat = () => {
 
   ).toLowerCase();
 
-  // If reopened, status is reset back to Pending!
+  // When a chat has been reopened, only resolutions that happened AFTER the reopen count
+  // toward approving or rejecting this current session.
+  const isPostReopen = lastReopenMsgIdx !== -1;
 
+  // 1. Approved: admin selected Approve (either in current session after reopen, or initially)
   const isTradeApproved =
-
     !isChatReopened &&
+    (isPostReopen
+      ? (lastApproveMsgIdx > lastReopenMsgIdx ||
+          ((chatInfo?.tradeStatus as string) === "approved" && (chatInfo as any)?.status === "closed"))
+      : (rawTradeStatus === "approved" ||
+          rawTradeStatus === "successful" ||
+          rawTradeStatus === "success" ||
+          (tradeData?.plan_status === 1 && !isChatReopened) ||
+          (lastApproveMsgIdx !== -1 && lastApproveMsgIdx > Math.max(lastRejectMsgIdx, lastCancelMsgIdx))));
 
-    (rawTradeStatus === "approved" ||
-
-      rawTradeStatus === "successful" ||
-
-      rawTradeStatus === "success" ||
-
-      (tradeData?.plan_status === 1 && !isChatReopened) ||
-
-      (lastApproveMsgIdx !== -1 && lastApproveMsgIdx > Math.max(lastRejectMsgIdx, lastCancelMsgIdx)));
-
+  // 2. Rejected: admin selected Reject (either in current session after reopen, or initially)
   const isTradeRejected =
-
     !isChatReopened &&
-
     !isTradeApproved &&
+    (isPostReopen
+      ? (lastRejectMsgIdx > lastReopenMsgIdx ||
+          ((chatInfo as any)?.status === "reject" && chatInfo?.chatStatus === "closed") ||
+          (chatInfo?.tradeStatus === "rejected" && (chatInfo as any)?.status === "reject"))
+      : (rawTradeStatus === "rejected" ||
+          rawTradeStatus === "reject" ||
+          rawTradeStatus === "failed" ||
+          (chatInfo as any)?.status === "reject" ||
+          (tradeData?.plan_status === 2 && !isChatReopened) ||
+          (lastRejectMsgIdx !== -1 && lastRejectMsgIdx > Math.max(lastApproveMsgIdx, lastCancelMsgIdx))));
 
-    (rawTradeStatus === "rejected" ||
-
-      rawTradeStatus === "reject" ||
-
-      rawTradeStatus === "failed" ||
-
-      (chatInfo as any)?.status === "reject" ||
-
-      (tradeData?.plan_status === 2 && !isChatReopened) ||
-
-      (lastRejectMsgIdx !== -1 && lastRejectMsgIdx > Math.max(lastApproveMsgIdx, lastCancelMsgIdx)));
-
+  // 3. Cancelled: trade was cancelled
   const isTradeCancelled =
-
     !isChatReopened &&
-
     !isTradeApproved &&
-
     !isTradeRejected &&
+    (isPostReopen
+      ? (lastCancelMsgIdx > lastReopenMsgIdx || (chatInfo as any)?.status === "cancelled")
+      : (rawTradeStatus === "cancelled" ||
+          rawTradeStatus === "cancel" ||
+          (chatInfo as any)?.status === "cancelled" ||
+          (chatInfo as any)?.status === "cancel" ||
+          lastCancelMsgIdx !== -1));
 
-    (rawTradeStatus === "cancelled" ||
-
-      rawTradeStatus === "cancel" ||
-
-      (chatInfo as any)?.status === "cancelled" ||
-
-      (chatInfo as any)?.status === "cancel" ||
-
-      lastCancelMsgIdx !== -1);
-
-  const isTradePending = !isTradeApproved && !isTradeRejected && !isTradeCancelled;
-
-  // Trade status badge at the top: changes back to "Pending" when reopened
-
-  const displayStatusText = isChatReopened
-
-    ? "Pending"
-
-    : isTradeApproved
-
-      ? "Successful"
-
-      : isTradeRejected
-
-        ? "Rejected"
-
-        : isTradeCancelled
-
-          ? "Cancelled"
-
-          : "Pending";
-
-  const statusColor = isChatReopened
-
-    ? "#F59E0B"
-
-    : isTradeApproved
-
-      ? (isDark ? "#37C415" : "#28A712")
-
-      : (isTradeRejected || isTradeCancelled)
-
-        ? (isDark ? "#EF4444" : "#E53935")
-
-        : "#F59E0B";
-
-  const statusBgColor = isChatReopened
-
-    ? (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB")
-
-    : isTradeApproved
-
-      ? (isDark ? "#0B2E02" : "#E8FFE4")
-
-      : (isTradeRejected || isTradeCancelled)
-
-        ? (isDark ? "#300808" : "#FFE8E8")
-
-        : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
-
-  const statusBorderColor = isChatReopened
-
-    ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A")
-
-    : isTradeApproved
-
-      ? (isDark ? "#37C415" : "#28A712")
-
-      : (isTradeRejected || isTradeCancelled)
-
-        ? (isDark ? "#EF4444" : "#E53935")
-
-        : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
-
-  // A chat is considered closed when marked closed/reject in Firestore or via system resolution.
-
-  // When reopened, it is strictly NOT closed.
-
+  // 4. Closed: chat was closed in Firestore or message history
   const isDocClosed =
     chatInfo?.chatStatus === "closed" ||
     (chatInfo as any)?.status === "closed" ||
@@ -865,6 +792,63 @@ const TradeChat = () => {
       isTradeRejected ||
       isTradeCancelled);
 
+  // 5. Just Closed: closed without Approve, Reject, or Cancel selected
+  const isTradeJustClosed =
+    isChatClosed &&
+    !isTradeApproved &&
+    !isTradeRejected &&
+    !isTradeCancelled;
+
+  const isTradePending = !isChatClosed && !isTradeApproved && !isTradeRejected && !isTradeCancelled;
+
+  // Trade status badge at the top:
+  // - "Pending" (amber) when reopened or active pending
+  // - "Successful" (green) when approved
+  // - "Rejected" (red) when rejected
+  // - "Cancelled" (red) when cancelled
+  // - "Closed" (neutral gray) when just closed without approve/reject selected
+  const displayStatusText = isChatReopened
+    ? "Pending"
+    : isTradeApproved
+      ? "Successful"
+      : isTradeRejected
+        ? "Rejected"
+        : isTradeCancelled
+          ? "Cancelled"
+          : isTradeJustClosed
+            ? "Closed"
+            : "Pending";
+
+  const statusColor = isChatReopened
+    ? "#F59E0B"
+    : isTradeApproved
+      ? (isDark ? "#37C415" : "#28A712")
+      : (isTradeRejected || isTradeCancelled)
+        ? (isDark ? "#EF4444" : "#E53935")
+        : isTradeJustClosed
+          ? (isDark ? "#A1A1AA" : "#6B7280")
+          : "#F59E0B";
+
+  const statusBgColor = isChatReopened
+    ? (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB")
+    : isTradeApproved
+      ? (isDark ? "#0B2E02" : "#E8FFE4")
+      : (isTradeRejected || isTradeCancelled)
+        ? (isDark ? "#300808" : "#FFE8E8")
+        : isTradeJustClosed
+          ? (isDark ? "rgba(161, 161, 170, 0.15)" : "#F3F4F6")
+          : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
+
+  const statusBorderColor = isChatReopened
+    ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A")
+    : isTradeApproved
+      ? (isDark ? "#37C415" : "#28A712")
+      : (isTradeRejected || isTradeCancelled)
+        ? (isDark ? "#EF4444" : "#E53935")
+        : isTradeJustClosed
+          ? (isDark ? "#3F3F46" : "#E5E7EB")
+          : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
+
   const rejectionReason =
 
     chatInfo?.rejectReason ||
@@ -880,6 +864,13 @@ const TradeChat = () => {
   // Scroll to bottom when new messages arrive - REMOVED for inverted list
 
   // Inverted lists are anchored to the bottom by default.
+
+  // Reset trade bar height when the bar is hidden (trade not approved/rejected, or reopened)
+  useEffect(() => {
+    if (isSupportChat || (!isTradeApproved && !isTradeRejected) || isChatReopened) {
+      setTradeBarHeight(0);
+    }
+  }, [isSupportChat, isTradeApproved, isTradeRejected, isChatReopened]);
 
   const scrollToBottom = useCallback(() => {
 
@@ -2433,9 +2424,11 @@ const TradeChat = () => {
 
           {/* Trade Status Bar (appears when trade is resolved) - stays with End chat when successful */}
 
-          {!isSupportChat && isTradeApproved && !isChatReopened && (
+          {!isSupportChat && (isTradeApproved || isTradeRejected) && !isChatReopened && (
 
             <View
+
+              onLayout={(e) => setTradeBarHeight(e.nativeEvent.layout.height)}
 
               style={{
 
@@ -2617,7 +2610,7 @@ const TradeChat = () => {
 
                 position: "absolute",
 
-                bottom: inputBarHeight + 12,
+                bottom: inputBarHeight + tradeBarHeight + 12,
 
                 right: 16,
 
@@ -2938,6 +2931,34 @@ const TradeChat = () => {
                             stroke="#FFFFFF"
 
                             strokeWidth={2.5}
+
+                            strokeLinecap="round"
+
+                          />
+
+                        </Svg>
+
+                      )}
+
+                      {config.icon === "closed" && (
+
+                        <Svg width={38} height={38} viewBox="0 0 24 24" fill="none">
+
+                          <Path
+
+                            d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"
+
+                            fill={isDark ? "#3F3F46" : "#D1D5DB"}
+
+                          />
+
+                          <Path
+
+                            d="M15 9l-6 6M9 9l6 6"
+
+                            stroke="#FFFFFF"
+
+                            strokeWidth={2}
 
                             strokeLinecap="round"
 
