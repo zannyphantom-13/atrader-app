@@ -50,14 +50,17 @@ const initZohoChat = () => {
   const accessKey = Platform.OS === "ios" ? IOS_ACCESS_KEY : ANDROID_ACCESS_KEY;
 
   if (appKey && accessKey) {
-    // Decode URL-encoded keys before passing to native SDK
-    const decodedAppKey = decodeURIComponent(appKey);
-    const decodedAccessKey = decodeURIComponent(accessKey);
-
+    // Try raw keys first (exact format in working APK), with fallback to decoded
     ZohoSalesIQ.initialize({
-      appKey: decodedAppKey,
-      accessKey: decodedAccessKey,
+      appKey: appKey,
+      accessKey: accessKey,
     })
+      .catch(() => {
+        return ZohoSalesIQ.initialize({
+          appKey: decodeURIComponent(appKey),
+          accessKey: decodeURIComponent(accessKey),
+        });
+      })
       .then(() => {
         console.log("Zoho Chat initialized successfully");
 
@@ -418,33 +421,5 @@ export interface AppSupportUserContext {
  * Completely decoupled and isolated from manual human-agent ticket queues and Gift Card routing.
  */
 export const openAppSupport = async (userContext?: AppSupportUserContext) => {
-  try {
-    console.log("[ZohoService] Initiating dedicated App Support session...");
-
-    if (!ZohoSalesIQ) {
-      console.warn("[ZohoService] ZohoSalesIQ module is not linked or unavailable.");
-      return;
-    }
-
-    // Safely set visitor profile info if available
-    if (userContext?.name && typeof ZohoSalesIQ.setVisitorName === "function") {
-      try { ZohoSalesIQ.setVisitorName(userContext.name); } catch (e) {}
-    }
-    if (userContext?.email && typeof ZohoSalesIQ.setVisitorEmail === "function") {
-      try { ZohoSalesIQ.setVisitorEmail(userContext.email); } catch (e) {}
-    }
-
-    // Open chat UI directly
-    console.log("[ZohoService] Opening Zoho chat window for App Support");
-    if (typeof ZohoSalesIQ.openChat === "function") {
-      ZohoSalesIQ.openChat();
-    } else if (ZohoSalesIQ.Chat && typeof ZohoSalesIQ.Chat.show === "function") {
-      ZohoSalesIQ.Chat.show();
-    }
-  } catch (error) {
-    console.error("[ZohoService] Failed to open App Support session:", error);
-    try {
-      if (ZohoSalesIQ?.openChat) ZohoSalesIQ.openChat();
-    } catch (e) {}
-  }
+  return openChat("App Support");
 };
