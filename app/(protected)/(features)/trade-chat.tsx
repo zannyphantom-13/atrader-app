@@ -1,5 +1,13 @@
-﻿import { setGlobalActiveChatId, dismissChatNotification } from "@/lib/chat-state";
+import { setGlobalActiveChatId, dismissChatNotification } from "@/lib/chat-state";
 import { markChatReadByUser } from "@/lib/firebase-chat-service";
+import {
+  BOTTOM_SCROLL_THRESHOLD,
+  UNREAD_CLEAR_ANIMATION_MS,
+  UNREAD_COLORS,
+  computeUnreadSnapshot,
+  isChatMessageSystem,
+  isInvertedNearBottom,
+} from "@/lib/chat-unread-tracker";
 import EndChatModal from "@/components/modals/EndChatModal";
 import { TradeDetailsDrawer } from "@/components/modals/TradeDetailsDrawer";
 import { MessageBubbleSkeleton } from "@/components/skeletons/chatskeleton";
@@ -137,6 +145,16 @@ const TradeChat = () => {
 
   useEffect(() => {
     hasInitialScrolledRef.current = false;
+    isUnreadSeededRef.current = false;
+    isClearingUnreadRef.current = false;
+    hasClearedUnreadRef.current = false;
+    firstUnreadMessageIdRef.current = null;
+    unreadMessageIdsRef.current.clear();
+    setUnreadMessageIds(new Set());
+    setIsUnreadCleared(false);
+    setOpenUnreadCount(0);
+    setFloatingUnreadCount(0);
+    unreadAnim.setValue(1);
   }, [chatId]);
 
   const [inputText, setInputText] = useState("");
@@ -144,13 +162,21 @@ const TradeChat = () => {
   const [showEndChatModal, setShowEndChatModal] = useState(false);
   // Snapshot of how many agent messages were unread when the chat was opened
   const [openUnreadCount, setOpenUnreadCount] = useState<number>(0);
+  const [unreadMessageIds, setUnreadMessageIds] = useState<Set<string>>(new Set());
+  const unreadMessageIdsRef = useRef<Set<string>>(new Set());
+  const firstUnreadMessageIdRef = useRef<string | null>(null);
   const isUnreadSeededRef = useRef<boolean>(false);
   const hasInitialScrolledRef = useRef<boolean>(false);
-  // Scroll-position tracking for unread counter behaviour (Section 3)
-  const BOTTOM_THRESHOLD = 150; // px from bottom to be considered "near bottom"
+  const isClearingUnreadRef = useRef<boolean>(false);
+  const hasClearedUnreadRef = useRef<boolean>(false);
+  const [isUnreadCleared, setIsUnreadCleared] = useState<boolean>(false);
+  const unreadAnim = useRef(new RNAnimated.Value(1)).current;
+
+  // Scroll-position tracking for unread counter behaviour
   const isNearBottomRef = useRef<boolean>(true); // inverted list starts at bottom
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [floatingUnreadCount, setFloatingUnreadCount] = useState<number>(0);
+  const [inputBarHeight, setInputBarHeight] = useState<number>(76);
   const [isEndingChat, setIsEndingChat] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [visibleImageIndex, setVisibleImageIndex] = useState(0);
@@ -449,6 +475,11 @@ const TradeChat = () => {
     setShowScrollButton(false);
     setFloatingUnreadCount(0);
     setOpenUnreadCount(0);
+    unreadMessageIdsRef.current.clear();
+    setUnreadMessageIds(new Set());
+    hasClearedUnreadRef.current = true;
+    setIsUnreadCleared(true);
+    firstUnreadMessageIdRef.current = null;
     if (chatId) {
       markChatReadByUser(chatId).catch(() => {});
     }
@@ -461,6 +492,11 @@ const TradeChat = () => {
     // Instantly reset unread counters in local state & clear unread divider
     setOpenUnreadCount(0);
     setFloatingUnreadCount(0);
+    unreadMessageIdsRef.current.clear();
+    setUnreadMessageIds(new Set());
+    hasClearedUnreadRef.current = true;
+    setIsUnreadCleared(true);
+    firstUnreadMessageIdRef.current = null;
     scrollToBottom();
     try {
       await sendText(text);
@@ -487,6 +523,11 @@ const TradeChat = () => {
     if (!result.canceled && result.assets?.length) {
       setOpenUnreadCount(0);
       setFloatingUnreadCount(0);
+      unreadMessageIdsRef.current.clear();
+      setUnreadMessageIds(new Set());
+      hasClearedUnreadRef.current = true;
+      setIsUnreadCleared(true);
+      firstUnreadMessageIdRef.current = null;
       scrollToBottom();
       try {
         for (const asset of result.assets) {
@@ -530,18 +571,25 @@ const TradeChat = () => {
   }, []);
 
 
-  // Seed the openUnreadCount from chatInfo on first valid read
+  // Seed unread snapshot from messages + chatInfo on first valid read
   useEffect(() => {
-    if (!isUnreadSeededRef.current && chatInfo !== null) {
+    if (!isUnreadSeededRef.current && messages.length > 0) {
       isUnreadSeededRef.current = true;
       const raw =
-        (chatInfo as any).unreadByCustomer ||
-        (chatInfo as any).unreadByUser ||
-        (chatInfo as any).unreadCount ||
+        (chatInfo as any)?.unreadByCustomer ||
+        (chatInfo as any)?.unreadByUser ||
+        (chatInfo as any)?.unreadCount ||
         0;
-      setOpenUnreadCount(Math.max(0, Number(raw) || 0));
+      const rawCount = Math.max(0, Number(raw) || 0);
+      const snapshot = computeUnreadSnapshot(messages, "customer", rawCount);
+
+      unreadMessageIdsRef.current = new Set(snapshot.unreadIds);
+      setUnreadMessageIds(new Set(snapshot.unreadIds));
+      firstUnreadMessageIdRef.current = snapshot.firstUnreadId;
+      setOpenUnreadCount(snapshot.unreadCount);
+      setFloatingUnreadCount(snapshot.unreadCount);
     }
-  }, [chatInfo]);
+  }, [messages, chatInfo]);
 
   const formatTime = (timestamp: Timestamp | null | undefined) => {
     if (!timestamp) return "";
@@ -557,37 +605,6 @@ const TradeChat = () => {
   // Render Message Bubble
   // ============================================
   const chronologicalMessages = React.useMemo(() => [...messages].reverse(), [messages]);
-  // Index in chronologicalMessages (inverted: 0 is newest, length-1 is oldest) where unread agent messages start
-  const firstUnreadIndex = React.useMemo(() => {
-    if (!chronologicalMessages.length) return -1;
-
-    // Check individual message readByUser status: the first unread in the stream is the oldest unread (highest index in inverted list)
-    let maxUnreadIdx = -1;
-    for (let i = 0; i < chronologicalMessages.length; i++) {
-      const m = chronologicalMessages[i];
-      if (m.senderType !== "user" && !isSystemMessage(m) && m.readByUser === false) {
-        maxUnreadIdx = i;
-      }
-    }
-    if (maxUnreadIdx !== -1) return maxUnreadIdx;
-
-    // Fallback to openUnreadCount
-    if (openUnreadCount > 0) {
-      let agentCount = 0;
-      let targetIdx = -1;
-      for (let i = 0; i < chronologicalMessages.length; i++) {
-        const m = chronologicalMessages[i];
-        if (m.senderType !== "user" && !isSystemMessage(m)) {
-          agentCount++;
-          targetIdx = i;
-          if (agentCount >= openUnreadCount) break;
-        }
-      }
-      return targetIdx;
-    }
-
-    return -1;
-  }, [chronologicalMessages, openUnreadCount]);
 
   // Initial scroll-into-view handler: triggers on component mount or data fetch completion
   useEffect(() => {
@@ -597,10 +614,12 @@ const TradeChat = () => {
     hasInitialScrolledRef.current = true;
 
     const timer = setTimeout(() => {
-      if (firstUnreadIndex > 0 && firstUnreadIndex < chronologicalMessages.length) {
+      const firstId = firstUnreadMessageIdRef.current;
+      const targetIdx = firstId ? chronologicalMessages.findIndex(m => m.id === firstId) : -1;
+      if (targetIdx > 0 && targetIdx < chronologicalMessages.length) {
         try {
           flatListRef.current?.scrollToIndex({
-            index: firstUnreadIndex,
+            index: targetIdx,
             animated: false,
             viewPosition: 0.5,
           });
@@ -613,7 +632,7 @@ const TradeChat = () => {
     }, 120);
 
     return () => clearTimeout(timer);
-  }, [isLoading, isCreating, chronologicalMessages.length, firstUnreadIndex]);
+  }, [isLoading, isCreating, chronologicalMessages.length]);
 
   const imageMessages = React.useMemo(() => {
     return chronologicalMessages.filter(msg => msg.type === "image" && msg.imageUrl);
@@ -625,42 +644,78 @@ const TradeChat = () => {
     const prevCount = prevMessageCountRef.current;
     const currentCount = chronologicalMessages.length;
     if (currentCount > prevCount && prevCount > 0) {
-      const newAgentMessages = chronologicalMessages
-        .slice(0, currentCount - prevCount)
-        .filter(m => m.senderType !== "user" && !isSystemMessage(m));
+      const newMessages = chronologicalMessages.slice(0, currentCount - prevCount);
+      const newAgentMessages = newMessages.filter(
+        (m) => m.senderType !== "user" && !isChatMessageSystem(m)
+      );
+
       if (newAgentMessages.length > 0) {
         if (isNearBottomRef.current) {
           // User is at bottom: auto-scroll and mark read
           flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
           if (chatId) markChatReadByUser(chatId).catch(() => {});
         } else {
-          // User is scrolled up: increment floating counter
+          // User is scrolled up:
+          // Add new message IDs to unreadMessageIds
+          newAgentMessages.forEach((m) => {
+            if (m.id) {
+              unreadMessageIdsRef.current.add(m.id);
+            }
+          });
+          setUnreadMessageIds(new Set(unreadMessageIdsRef.current));
+          setOpenUnreadCount(unreadMessageIdsRef.current.size);
           setFloatingUnreadCount(prev => prev + newAgentMessages.length);
+          // Reset animation so new messages are highlighted
+          unreadAnim.setValue(1);
+          isClearingUnreadRef.current = false;
+          hasClearedUnreadRef.current = false;
+          setIsUnreadCleared(false);
+          // Note: firstUnreadMessageIdRef.current stays unchanged, so divider does NOT move!
         }
       }
     }
     prevMessageCountRef.current = currentCount;
-  }, [chronologicalMessages.length]);
+  }, [chronologicalMessages.length, chatId]);
 
   const handleScroll = useCallback((event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const nearBottom = offsetY <= BOTTOM_THRESHOLD;
+    const nearBottom = isInvertedNearBottom(offsetY, BOTTOM_SCROLL_THRESHOLD);
     const wasNearBottom = isNearBottomRef.current;
     isNearBottomRef.current = nearBottom;
 
     if (nearBottom) {
-      // Arrived at bottom: clear everything and mark read
-      if (!wasNearBottom) {
-        setShowScrollButton(false);
-        setFloatingUnreadCount(0);
+      setShowScrollButton(false);
+      // Arrived at bottom: trigger animated clear if unreads exist and not already clearing
+      if (
+        !isClearingUnreadRef.current &&
+        !hasClearedUnreadRef.current &&
+        (openUnreadCount > 0 || unreadMessageIdsRef.current.size > 0)
+      ) {
+        isClearingUnreadRef.current = true;
+        // Reset unread count in data and local state AT ANIMATION START
         setOpenUnreadCount(0);
-        if (chatId) markChatReadByUser(chatId).catch(() => {});
+        setFloatingUnreadCount(0);
+        if (chatId) {
+          markChatReadByUser(chatId).catch(() => {});
+        }
+
+        RNAnimated.timing(unreadAnim, {
+          toValue: 0,
+          duration: UNREAD_CLEAR_ANIMATION_MS,
+          useNativeDriver: false,
+        }).start(({ finished }) => {
+          if (finished) {
+            hasClearedUnreadRef.current = true;
+            setIsUnreadCleared(true);
+            unreadMessageIdsRef.current.clear();
+            setUnreadMessageIds(new Set());
+          }
+        });
       }
     } else {
-      // Scrolled away from bottom
       setShowScrollButton(true);
     }
-  }, [chatId]);
+  }, [chatId, openUnreadCount]);
 
   const handleImagePress = (messageId: string) => {
     const index = imageMessages.findIndex(msg => msg.id === messageId);
@@ -677,50 +732,49 @@ const TradeChat = () => {
   };
 
   const renderMessage = ({ item, index }: { item: MessageDocument; index: number }) => {
-    const isSystem = isSystemMessage(item);
+    const isSystem = isChatMessageSystem(item);
     const isUser = item.senderType === "user";
 
-    // Unread divider: appears above the first unread agent message in the stream
-    const showDivider = firstUnreadIndex >= 0 && index === firstUnreadIndex;
-    const isUnreadMessage =
-      firstUnreadIndex >= 0 &&
-      index <= firstUnreadIndex &&
-      item.senderType !== "user" &&
-      !isSystemMessage(item);
+    // Unread divider: appears strictly above the initial first unread agent message
+    const isFirstUnread = !isUnreadCleared && Boolean(item.id && item.id === firstUnreadMessageIdRef.current);
+    const isUnread = !isUser && !isSystem && Boolean(item.id && unreadMessageIds.has(item.id));
 
-    const unreadCountDisplay =
-      openUnreadCount > 0
-        ? openUnreadCount
-        : firstUnreadIndex >= 0
-          ? firstUnreadIndex + 1
-          : 0;
+    const currentCountDisplay = openUnreadCount > 0 ? openUnreadCount : unreadMessageIds.size;
 
-    const dividerEl = showDivider ? (
-      <View
+    const dividerEl = isFirstUnread ? (
+      <RNAnimated.View
         style={{
+          opacity: unreadAnim,
+          maxHeight: unreadAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 48],
+          }),
+          overflow: "hidden",
+          marginVertical: unreadAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 12],
+          }),
           flexDirection: "row",
           alignItems: "center",
-          marginVertical: 12,
-          marginHorizontal: 4,
           paddingHorizontal: 16,
         }}
       >
-        <View style={{ flex: 1, height: 1, backgroundColor: "#28A712", opacity: 0.4 }} />
+        <View style={{ flex: 1, height: 1, backgroundColor: UNREAD_COLORS.DIVIDER_GREEN, opacity: 0.4 }} />
         <ThemedText
           family="primary"
           weight="bold"
           style={{
-            color: "#28A712",
+            color: UNREAD_COLORS.DIVIDER_GREEN,
             fontSize: 11,
             marginHorizontal: 10,
             backgroundColor: isDark ? "#0C0C0C" : "#FFFFFF",
             paddingHorizontal: 6,
           }}
         >
-          {unreadCountDisplay} unread {unreadCountDisplay === 1 ? "message" : "messages"}
+          {currentCountDisplay} unread {currentCountDisplay === 1 ? "message" : "messages"}
         </ThemedText>
-        <View style={{ flex: 1, height: 1, backgroundColor: "#28A712", opacity: 0.4 }} />
-      </View>
+        <View style={{ flex: 1, height: 1, backgroundColor: UNREAD_COLORS.DIVIDER_GREEN, opacity: 0.4 }} />
+      </RNAnimated.View>
     ) : null;
 
     if (isSystem) {
@@ -806,6 +860,8 @@ const TradeChat = () => {
                   borderRadius: 12,
                   borderTopLeftRadius: 0,
                   overflow: "hidden",
+                  borderWidth: isUnread && !hasClearedUnreadRef.current ? 1.5 : 0,
+                  borderColor: UNREAD_COLORS.HIGHLIGHT_BORDER,
                 }}
               >
                 <Image
@@ -834,7 +890,7 @@ const TradeChat = () => {
                 </View>
               </Pressable>
             ) : (
-              <View
+              <RNAnimated.View
                 style={{
                   maxWidth: 295,
                   paddingTop: 12,
@@ -842,11 +898,25 @@ const TradeChat = () => {
                   paddingBottom: 6,
                   borderRadius: 12,
                   borderTopLeftRadius: 0,
-                  backgroundColor: isUnreadMessage
-                    ? (isDark ? "#0d1f0a" : "#EEF9EC")
+                  backgroundColor: isUnread && !hasClearedUnreadRef.current
+                    ? unreadAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [
+                          isDark ? "#111111" : "#F8F8F8",
+                          isDark ? UNREAD_COLORS.HIGHLIGHT_BG_DARK : UNREAD_COLORS.HIGHLIGHT_BG_LIGHT,
+                        ],
+                      })
                     : (isDark ? "#111111" : "#F8F8F8"),
-                  borderWidth: isUnreadMessage ? 1 : (isDark ? 0.5 : 0),
-                  borderColor: isUnreadMessage ? "#28A712" : "#232323",
+                  borderWidth: 1,
+                  borderColor: isUnread && !hasClearedUnreadRef.current
+                    ? unreadAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [
+                          isDark ? "#232323" : "transparent",
+                          UNREAD_COLORS.HIGHLIGHT_BORDER,
+                        ],
+                      })
+                    : (isDark ? "#232323" : "transparent"),
                 }}
               >
                 <ThemedText
@@ -873,7 +943,7 @@ const TradeChat = () => {
                 >
                   {formatTime(item.createdAt)}
                 </ThemedText>
-              </View>
+              </RNAnimated.View>
             )}
           </View>
         </View>
@@ -1194,7 +1264,7 @@ const TradeChat = () => {
                 paddingTop: 10, // Added for inverted list top (which is visual bottom)
                 flexGrow: 1
               }}
-              initialNumToRender={Math.max(20, (firstUnreadIndex >= 0 ? firstUnreadIndex + 5 : 20))}
+              initialNumToRender={25}
               maxToRenderPerBatch={20}
               windowSize={11}
               showsVerticalScrollIndicator={false}
@@ -1312,28 +1382,29 @@ const TradeChat = () => {
               onPress={scrollToBottom}
               style={{
                 position: "absolute",
-                bottom: 80,
-                alignSelf: "center",
+                bottom: inputBarHeight + 12,
+                right: 16,
+                zIndex: 999,
+                elevation: 10,
                 flexDirection: "row",
                 alignItems: "center",
                 backgroundColor: isDark ? "#1A1A1A" : "#FFFFFF",
-                borderRadius: 20,
+                borderRadius: 24,
                 paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingVertical: 9,
                 shadowColor: "#000",
-                shadowOpacity: 0.18,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 2 },
-                elevation: 5,
+                shadowOpacity: 0.22,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 3 },
                 borderWidth: 1,
-                borderColor: isDark ? "#333" : "#EFEFEF",
+                borderColor: isDark ? "#333333" : "#E5E7EB",
                 gap: 6,
               }}
             >
-              {floatingUnreadCount > 0 && (
+              {(openUnreadCount > 0 || floatingUnreadCount > 0 || unreadMessageIds.size > 0) && (
                 <View
                   style={{
-                    backgroundColor: "#28A712",
+                    backgroundColor: UNREAD_COLORS.DIVIDER_GREEN,
                     borderRadius: 10,
                     minWidth: 20,
                     height: 20,
@@ -1347,16 +1418,16 @@ const TradeChat = () => {
                     weight="bold"
                     style={{ fontSize: 11, color: "#FFFFFF", lineHeight: 14 }}
                   >
-                    {floatingUnreadCount}
+                    {openUnreadCount > 0 ? openUnreadCount : (floatingUnreadCount > 0 ? floatingUnreadCount : unreadMessageIds.size)}
                   </ThemedText>
                 </View>
               )}
               <ThemedText
                 family="primary"
                 weight="medium"
-                style={{ fontSize: 13, color: isDark ? "#E7E7E7" : "#333" }}
+                style={{ fontSize: 13, color: isDark ? "#E7E7E7" : "#1F2937" }}
               >
-                â†“ {floatingUnreadCount > 0 ? "New messages" : "Scroll to latest"}
+                ↓ {(openUnreadCount > 0 || floatingUnreadCount > 0 || unreadMessageIds.size > 0) ? "New messages" : "Scroll to latest"}
               </ThemedText>
             </Pressable>
           )}
@@ -1364,6 +1435,7 @@ const TradeChat = () => {
           {/* Input Bar or Closed Trade Banner */}
           {isChatClosed ? (
             <View
+              onLayout={(e) => setInputBarHeight(e.nativeEvent.layout.height)}
               className="pt-3 border-t bg-white dark:bg-[#111111]"
               style={{
                 borderTopColor: isDark ? "#232323" : "#EFEFEF",
@@ -1436,6 +1508,7 @@ const TradeChat = () => {
             </View>
           ) : (
             <View
+              onLayout={(e) => setInputBarHeight(e.nativeEvent.layout.height)}
               className="pt-3 border-t bg-white dark:bg-[#111111]"
               style={{
                 borderTopColor: isDark ? "#232323" : "#EFEFEF",
