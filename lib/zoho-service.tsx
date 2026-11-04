@@ -7,23 +7,25 @@ import { usePathname } from "expo-router";
 import { useEffect } from "react";
 import { NativeModules, Platform } from "react-native";
 
-const isZohoLinked = Boolean(
-  NativeModules?.RNZohoSalesIQMobilisten ||
-  (global as any)?.__turboModuleProxy?.('RNZohoSalesIQMobilisten')
-);
+let ZohoSalesIQ: any = null;
+let SIQTheme: any = null;
 
-let ZohoSalesIQ: typeof ZohoSalesIQType = null as any;
-let SIQTheme: typeof SIQThemeType = null as any;
-
-if (isZohoLinked) {
-  try {
-    const mobilisten = require("@react-native-zohosalesiq/mobilisten");
-    ZohoSalesIQ = mobilisten.ZohoSalesIQ;
-    SIQTheme = mobilisten.SIQTheme;
-  } catch (error) {
-    console.warn("[ZohoService] Failed to require @react-native-zohosalesiq/mobilisten:", error);
-  }
+try {
+  const mobilisten = require("@react-native-zohosalesiq/mobilisten");
+  ZohoSalesIQ = mobilisten.ZohoSalesIQ || mobilisten.default || mobilisten;
+  SIQTheme = mobilisten.SIQTheme;
+} catch (error) {
+  console.warn("[ZohoService] Failed to require @react-native-zohosalesiq/mobilisten:", error);
 }
+
+export const getIsZohoLinked = (): boolean => {
+  if (ZohoSalesIQ) return true;
+  return Boolean(
+    NativeModules?.RNZohoSalesIQMobilisten ||
+    (global as any)?.__turboModuleProxy?.('RNZohoSalesIQMobilisten')
+  );
+};
+export const isZohoLinked = getIsZohoLinked();
 
 const IOS_APP_KEY = process.env.EXPO_PUBLIC_ZOHO_IOS_APP_KEY;
 const IOS_ACCESS_KEY = process.env.EXPO_PUBLIC_ZOHO_IOS_ACCESS_KEY;
@@ -31,7 +33,7 @@ const ANDROID_APP_KEY = process.env.EXPO_PUBLIC_ZOHO_ANDROID_APP_KEY;
 const ANDROID_ACCESS_KEY = process.env.EXPO_PUBLIC_ZOHO_ANDROID_ACCESS_KEY;
 
 export const initializeZohoChat = async () => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
 
   } catch (error) {
@@ -40,7 +42,7 @@ export const initializeZohoChat = async () => {
 };
 
 const initZohoChat = () => {
-  if (!isZohoLinked) {
+  if (!getIsZohoLinked()) {
     console.log("[ZohoService] Native Zoho SDK not linked (running in Expo Go). Skipping init.");
     return;
   }
@@ -60,7 +62,7 @@ const initZohoChat = () => {
         console.log("Zoho Chat initialized successfully");
 
         // Verify if chat is enabled for this portal
-        ZohoSalesIQ.isChatEnabled((isEnabled) => {
+        ZohoSalesIQ.isChatEnabled((isEnabled: any) => {
           console.log("Zoho Chat Enabled status:", isEnabled);
         });
 
@@ -87,7 +89,7 @@ const initZohoChat = () => {
 
         console.log("Zoho Chat configuration applied");
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error("Zoho Chat initialization failed:", error);
         Sentry.captureException(error);
       });
@@ -100,7 +102,7 @@ const initZohoChat = () => {
 export default initZohoChat;
 
 export const hideLauncher = () => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     ZohoSalesIQ.Launcher.show(ZohoSalesIQ.Launcher.VisibilityMode.NEVER);
   } catch (error) {
@@ -110,7 +112,7 @@ export const hideLauncher = () => {
 
 // Show launcher
 export const showLauncher = () => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     ZohoSalesIQ.Launcher.show(ZohoSalesIQ.Launcher.VisibilityMode.ALWAYS);
   } catch (error) {
@@ -125,7 +127,7 @@ export const setLauncherPosition = (
     | "VERTICAL_BOTTOM"
     | "VERTICAL_TOP"
 ) => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     if (Platform.OS === "android") {
       const positionMap = {
@@ -147,7 +149,7 @@ export const setLauncherPosition = (
 };
 
 const setIOSTheme = () => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     const customTheme = new SIQTheme();
 
@@ -168,7 +170,7 @@ const setIOSTheme = () => {
 
 
 export const setThemeColor = (isDark: boolean) => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     console.log(`[ZohoService] Setting Theme Color. isDark: ${isDark}, Platform: ${Platform.OS}`);
     if (Platform.OS === "android") {
@@ -185,7 +187,7 @@ export const setThemeColor = (isDark: boolean) => {
 };
 
 export const showArticles = async () => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     // ZohoSalesIQ.KnowledgeBase.open();
   } catch (error) {
@@ -194,7 +196,7 @@ export const showArticles = async () => {
 };
 
 export const showConversations = async (show: boolean) => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     ZohoSalesIQ.showOfflineMessage(show);
   } catch (error) {
@@ -213,7 +215,7 @@ const customizeLauncher = () => {
 
 // ICON CUSTOMIZATION (Android only)
 const setLauncherIcon = () => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   if (Platform.OS === "android") {
     try {
       // Set custom icon (resource name from your Android drawables)
@@ -225,11 +227,11 @@ const setLauncherIcon = () => {
 };
 
 export const setZohoVisitor = (userId: string, email?: string, name?: string) => {
-  if (!isZohoLinked || !userId) return;
+  if (!getIsZohoLinked() || !userId) return;
   console.log(`[ZohoService] Registering participant: ${userId}`);
 
   try {
-    ZohoSalesIQ.registerVisitor(userId, (error, success) => {
+    ZohoSalesIQ.registerVisitor(userId, (error: any, success: any) => {
       if (success) {
         console.log(`[ZohoService] Visitor linked successfully: ${userId}`);
         if (email) ZohoSalesIQ.setVisitorEmail(email);
@@ -248,7 +250,7 @@ export const setZohoVisitor = (userId: string, email?: string, name?: string) =>
 };
 
 export const clearZohoVisitor = () => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     ZohoSalesIQ.dismissUI();
     ZohoSalesIQ.setVisitorName("");
@@ -263,10 +265,10 @@ export const clearZohoVisitor = () => {
 
 
 export const attachZohoActivityListeners = (resetTimer: () => void) => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     // 1. Listen for UI opens/closes (using the new addListener API)
-    ZohoSalesIQ.addListener((payload) => {
+    ZohoSalesIQ.addListener((payload: any) => {
       const { event } = payload;
       if (
         event === ZohoSalesIQ.Event.SUPPORT_OPENED ||
@@ -278,7 +280,7 @@ export const attachZohoActivityListeners = (resetTimer: () => void) => {
     });
 
     // 2. Listen for any chat activity (messages sent/received)
-    ZohoSalesIQ.Chat.addListener((payload) => {
+    ZohoSalesIQ.Chat.addListener((payload: any) => {
       console.log(`[ZohoService] Chat Activity (${payload?.event}) - Resetting Timer`);
       resetTimer();
     });
@@ -291,7 +293,7 @@ export const attachZohoActivityListeners = (resetTimer: () => void) => {
 
 
 export const openChat = async (department?: string, transactionId?: string, transactionType?: string) => {
-  if (!isZohoLinked) {
+  if (!getIsZohoLinked()) {
     console.log("[ZohoService] Zoho Chat is unavailable in this environment (running without native Zoho module).");
     return;
   }
@@ -314,7 +316,7 @@ export const openChat = async (department?: string, transactionId?: string, tran
           message,
           customChatId,
           department,
-          (error, chat) => {
+          (error: any, chat: any) => {
             if (error) {
               console.error("Chat.start error:", JSON.stringify(error));
               if (error.code === 702 || error.code === 701 || error.code === 703 || error.code === 704 || error.code === 705) {
@@ -337,7 +339,7 @@ export const openChat = async (department?: string, transactionId?: string, tran
 
 
 export const registerDeviceTokenForZoho = (token: string) => {
-  if (!isZohoLinked || !token) return;
+  if (!getIsZohoLinked() || !token) return;
   try {
     const isTestDevice = __DEV__;
     ZohoSalesIQ.Notification.registerPush(token, isTestDevice);
@@ -350,9 +352,9 @@ export const registerDeviceTokenForZoho = (token: string) => {
  * Forwards incoming push notifications that belong to Zoho into the SDK
  */
 export const handleIncomingZohoNotification = (notificationData: any) => {
-  if (!isZohoLinked || !notificationData) return;
+  if (!getIsZohoLinked() || !notificationData) return;
   try {
-    ZohoSalesIQ.Notification.isSDKMessage(notificationData, (isSDK) => {
+    ZohoSalesIQ.Notification.isSDKMessage(notificationData, (isSDK: any) => {
       if (isSDK) {
         ZohoSalesIQ.Notification.process(notificationData);
       }
@@ -364,7 +366,7 @@ export const handleIncomingZohoNotification = (notificationData: any) => {
 
 
 export const openChatWithId = async (chatID: string) => {
-  if (!isZohoLinked) return;
+  if (!getIsZohoLinked()) return;
   try {
     ZohoSalesIQ.openChatWithID(chatID);
   } catch (error) {
@@ -380,7 +382,7 @@ export const useZohoChatVisibility = () => {
   const { isDark } = useTheme();
 
   useEffect(() => {
-    if (!isZohoLinked) return;
+    if (!getIsZohoLinked()) return;
     try {
       if (allowedPaths.includes(pathname)) {
         ZohoSalesIQ.Launcher.show(ZohoSalesIQ.Launcher.VisibilityMode.ALWAYS);
@@ -416,49 +418,33 @@ export interface AppSupportUserContext {
  * Completely decoupled and isolated from manual human-agent ticket queues and Gift Card routing.
  */
 export const openAppSupport = async (userContext?: AppSupportUserContext) => {
-  if (!isZohoLinked) {
-    console.log("[ZohoService] Zoho Chat is unavailable in this environment (running without native Zoho module).");
-    return;
-  }
   try {
-    console.log("[ZohoService] Initiating dedicated App Support AI session...");
+    console.log("[ZohoService] Initiating dedicated App Support session...");
 
-    // 1. Identify visitor with Zoho AI sales engine if user context is available
-    if (userContext) {
-      const visitorId = userContext.id ? String(userContext.id) : (userContext.email || "");
-      if (visitorId) {
-        setZohoVisitor(visitorId, userContext.email, userContext.name);
-      }
+    if (!ZohoSalesIQ) {
+      console.warn("[ZohoService] ZohoSalesIQ module is not linked or unavailable.");
+      return;
     }
 
-    // 2. Direct session to the App Support AI sales-managing engine department
-    if (ZohoSalesIQ && typeof ZohoSalesIQ.setDepartment === "function") {
-      try {
-        ZohoSalesIQ.setDepartment("App Support");
-      } catch (deptErr) {
-        console.warn("[ZohoService] setDepartment warning:", deptErr);
-      }
+    // Safely set visitor profile info if available
+    if (userContext?.name && typeof ZohoSalesIQ.setVisitorName === "function") {
+      try { ZohoSalesIQ.setVisitorName(userContext.name); } catch (e) {}
+    }
+    if (userContext?.email && typeof ZohoSalesIQ.setVisitorEmail === "function") {
+      try { ZohoSalesIQ.setVisitorEmail(userContext.email); } catch (e) {}
     }
 
-    // 3. Launch the automated AI support session
-    if (ZohoSalesIQ?.Chat && typeof ZohoSalesIQ.Chat.startWithTrigger === "function") {
-      ZohoSalesIQ.Chat.startWithTrigger(null, "App Support", (error, chat) => {
-        if (error) {
-          console.log("[ZohoService] Chat.startWithTrigger fallback to openChat:", error);
-          ZohoSalesIQ.openChat();
-        } else {
-          console.log("[ZohoService] Zoho AI session started successfully:", JSON.stringify(chat));
-        }
-      });
-    } else {
+    // Open chat UI directly
+    console.log("[ZohoService] Opening Zoho chat window for App Support");
+    if (typeof ZohoSalesIQ.openChat === "function") {
       ZohoSalesIQ.openChat();
+    } else if (ZohoSalesIQ.Chat && typeof ZohoSalesIQ.Chat.show === "function") {
+      ZohoSalesIQ.Chat.show();
     }
   } catch (error) {
     console.error("[ZohoService] Failed to open App Support session:", error);
     try {
-      ZohoSalesIQ.openChat();
-    } catch (fallbackErr) {
-      console.error("[ZohoService] Fallback openChat failed:", fallbackErr);
-    }
+      if (ZohoSalesIQ?.openChat) ZohoSalesIQ.openChat();
+    } catch (e) {}
   }
 };

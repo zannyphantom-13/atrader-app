@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { useRouter } from "expo-router";
 import { useChatList } from "@/hooks/useChatList";
 import {
@@ -29,6 +29,7 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
   const { user: userInfo } = user || {};
   const { expoPushToken } = useNotifications();
   const [isNavigating, setIsNavigating] = useState(false);
+  const isNavigatingRef = useRef(false);
 
   const effectiveUserId =
     userIdProp ||
@@ -40,22 +41,32 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
   const { chats, isLoading } = useChatList(effectiveUserId);
 
   const routeGiftCardSupport = useCallback(async () => {
-    if (!effectiveUserId) return null;
+    if (!effectiveUserId || isNavigatingRef.current) return null;
+    isNavigatingRef.current = true;
     setIsNavigating(true);
 
     try {
-      // 1. Unassigned State Check: evaluate existing active support threads
+      // 1. Unassigned State Check: evaluate existing active support threads in loaded list
       let unassignedThread = findActiveUnassignedSupportChat(chats);
 
-      // Cold launch or unhydrated snapshot guard: if not found and list is empty/loading, query Firestore directly
-      if (!unassignedThread && (isLoading || chats.length === 0)) {
+      // Collect all candidate user identifiers to ensure exhaustive Firestore deduplication
+      const authUid = getAuth().currentUser?.uid || "";
+      const infoIdStr = userInfo?.id ? String(userInfo.id) : "";
+      const rawCandidateIds = [userIdProp, effectiveUserId, authUid, infoIdStr].filter(Boolean) as string[];
+      const candidateIds = Array.from(new Set(rawCandidateIds.map((s) => String(s).trim()))).filter((s) => s.length > 0);
+
+      // Always verify directly against Firestore if unassigned thread was not in local snapshot
+      if (!unassignedThread && candidateIds.length > 0) {
         try {
-          const chatsQuery = query(
-            collection(db, "chats"),
-            where("userId", "==", effectiveUserId)
-          );
+          const chatsRef = collection(db, "chats");
+          const chatsQuery = candidateIds.length === 1
+            ? query(chatsRef, where("userId", "==", candidateIds[0]))
+            : query(chatsRef, where("userId", "in", candidateIds.slice(0, 10)));
           const snap = await getDocs(chatsQuery);
-          const fetchedChats = snap.docs.map((d) => d.data() as ChatDocument);
+          const fetchedChats = snap.docs.map((d) => ({
+            ...d.data(),
+            chatId: d.id,
+          }) as ChatDocument);
           unassignedThread = findActiveUnassignedSupportChat(fetchedChats);
         } catch (fetchErr) {
           console.warn("[GiftCardSupportRouting] Direct query fallback error:", fetchErr);
@@ -119,8 +130,9 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
       return null;
     } finally {
       setIsNavigating(false);
+      isNavigatingRef.current = false;
     }
-  }, [effectiveUserId, chats, userInfo, expoPushToken, router]);
+  }, [effectiveUserId, chats, userInfo, expoPushToken, router, userIdProp]);
 
   return {
     routeGiftCardSupport,

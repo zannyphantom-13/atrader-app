@@ -675,7 +675,9 @@ export const findActiveUnassignedSupportChat = (
     chats.find((c) => {
       const isSupport =
         c.type === "support" ||
+        (c as any).chatType === "support" ||
         c.cardCategory === "Support" ||
+        c.cardName === "Gift Card Support" ||
         Boolean(c.chatId?.startsWith("support_"));
       if (!isSupport) return false;
       const isClosed =
@@ -684,8 +686,13 @@ export const findActiveUnassignedSupportChat = (
         (c as any).status === "resolved" ||
         (c as any).tradeStatus === "closed";
       if (isClosed) return false;
+      const assignedVal = c.assignedAgent || (c as any).assignedTo || null;
       const hasAgent = Boolean(
-        c.assignedAgent || c.assignedAgentName || (c as any).assignedTo,
+        assignedVal &&
+        assignedVal !== "Unassigned" &&
+        assignedVal !== "unassigned" &&
+        assignedVal !== "null" &&
+        assignedVal !== "none"
       );
       return !hasAgent;
     }) || null

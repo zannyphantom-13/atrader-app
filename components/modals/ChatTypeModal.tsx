@@ -11,6 +11,7 @@ interface ChatTypeModalProps {
   onClose: () => void;
   onSelectGiftCard: () => void;
   onSelectAppSupport: () => void;
+  isSubmitting?: boolean;
 }
 
 export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
@@ -18,6 +19,7 @@ export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
   onClose,
   onSelectGiftCard,
   onSelectAppSupport,
+  isSubmitting = false,
 }) => {
   const { isDark } = useTheme();
 
@@ -44,6 +46,7 @@ export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
 
         {/* Gift Card Issues */}
         <Pressable
+          disabled={isSubmitting}
           onPress={() => {
             onClose();
             onSelectGiftCard();
