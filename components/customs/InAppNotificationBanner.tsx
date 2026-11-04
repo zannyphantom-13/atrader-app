@@ -238,10 +238,7 @@ export const InAppNotificationBanner = () => {
             ? "Atrader Support"
             : (cardLabel ? `Atrader Support — ${cardLabel}` : "Atrader Support");
 
-          const isFirst = newCount <= 1;
-          const preview = isFirst
-            ? (chatData.lastMessage || "New message awaiting you")
-            : `${newCount} new messages`;
+          const preview = "New - Message awaiting you";
 
           showBanner({
             name: title,

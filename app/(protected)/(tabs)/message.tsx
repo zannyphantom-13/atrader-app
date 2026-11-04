@@ -105,6 +105,30 @@ const SupportChatScreen = () => {
       ? "Gift Card Support"
       : `Trade Support ~ ${item.cardName || "Gift Card"}`;
 
+    const unreadCount = getChatUnreadCount(item);
+    const isUnread = unreadCount > 0;
+    const isClosed =
+      item.chatStatus === "closed" ||
+      item.status === "closed" ||
+      item.status === "reject" ||
+      item.tradeStatus === "rejected";
+
+    // Privacy & Security: Do not expose raw message content for Gift Support & Trade Support
+    let subtitle = "New - Message awaiting you";
+    let isHighlighted = isUnread;
+
+    if (isClosed) {
+      subtitle = "This chat has been closed.";
+      isHighlighted = false;
+    } else if (isUnread || item.lastMessageSender === "agent") {
+      subtitle = "New - Message awaiting you";
+    } else if (item.lastMessageSender === "user") {
+      subtitle = "Message sent";
+    } else if (!item.lastMessage) {
+      subtitle = "No messages yet";
+      isHighlighted = false;
+    }
+
     return (
       <Pressable
         onPress={() => handleOpenChat(item.chatId, item.cardName, item.tradeId)}
@@ -166,11 +190,15 @@ const SupportChatScreen = () => {
           </ThemedText>
           <ThemedText
             family="secondary"
-            weight="medium"
-            className="text-[13px] mt-1 !text-[#4B5563] dark:!text-[#9CA3AF]"
+            weight={isHighlighted ? "bold" : "medium"}
+            className={`text-[13px] mt-1 ${
+              isHighlighted
+                ? "!text-[#22C55E] dark:!text-[#22C55E]"
+                : "!text-[#4B5563] dark:!text-[#9CA3AF]"
+            }`}
             numberOfLines={1}
           >
-            {item.lastMessage || "No messages yet"}
+            {subtitle}
           </ThemedText>
         </View>
 

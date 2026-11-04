@@ -291,10 +291,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           const notifTitle =
             notification.request.content.title ||
             (isSupport ? "Atrader Support" : (cardLabel ? `Atrader Support — ${cardLabel}` : "Atrader Support"));
-          const notifBody =
-            notification.request.content.body ||
-            pushData?.preview ||
-            "New message received";
+          const notifBody = "New - Message awaiting you";
 
           showInAppNotification({
             name: notifTitle,
