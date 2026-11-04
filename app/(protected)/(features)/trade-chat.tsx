@@ -23,6 +23,7 @@ import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
 import { ArrowLeft, ChevronDown, ImagePlus, X } from "lucide-react-native";
 import TradeRejectedIcon from "@/assets/images/trade-rejected.svg";
+import Svg, { Path } from "react-native-svg";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -428,6 +429,9 @@ const TradeChat = () => {
     !hasBeenReopened &&
     (chatInfo?.chatStatus === "closed" ||
       (chatInfo as any)?.status === "closed" ||
+      (chatInfo as any)?.status === "reject" ||
+      chatInfo?.tradeStatus === "rejected" ||
+      isTradeRejected ||
       (lastClosedMsgIdx !== -1 && lastReopenMsgIdx <= lastClosedMsgIdx));
 
   const rejectionReason =
@@ -1213,7 +1217,7 @@ const TradeChat = () => {
           )}
 
           {/* Trade Status Bar (appears when trade is resolved) - HIDE FOR SUPPORT CHATS */}
-          {!isSupportChat && (isTradeApproved || isTradeRejected) && (
+          {!isSupportChat && !isChatClosed && (isTradeApproved || isTradeRejected) && (
             <View
               style={{
                 minHeight: 56,
@@ -1357,87 +1361,161 @@ const TradeChat = () => {
             </Pressable>
           )}
 
-          {/* Input Bar */}
-          <View
-            className="pt-3 border-t bg-white dark:bg-[#111111]"
-            style={{
-              borderTopColor: isDark ? "#232323" : "#EFEFEF",
-              paddingBottom: Math.max(insets.bottom, 12),
-            }}
-          >
-            <View className="px-5">
-              <View className="flex-row items-center gap-2">
+          {/* Input Bar or Closed Trade Banner */}
+          {isChatClosed ? (
+            <View
+              className="pt-3 border-t bg-white dark:bg-[#111111]"
+              style={{
+                borderTopColor: isDark ? "#232323" : "#EFEFEF",
+                paddingBottom: Math.max(insets.bottom, 16),
+              }}
+            >
+              <View className="px-5">
                 <View
                   style={{
-                    flex: 1,
-                    height: 46,
-                    borderRadius: 20,
-                    paddingHorizontal: 14,
+                    borderRadius: 18,
+                    backgroundColor: isDark ? "#231715" : "#FFF7F4",
+                    borderWidth: 1,
+                    borderColor: isDark ? "#38221D" : "#FDE6DE",
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: isDark ? "#0C0C0C" : "#FCFCFC",
-                    borderWidth: 0,
+                    justifyContent: "space-between",
                   }}
                 >
-                  <TextInput
-                    value={inputText}
-                    onChangeText={setInputText}
-                    placeholder="Describe your issues"
-                    placeholderTextColor={isDark ? "#B5B5B5" : "#4A4A4A"}
-                    editable={true}
-                    className="flex-1 text-[14px] h-full"
-                    style={{
-                      color: isDark ? "#FFFFFF" : "#0C0C0C",
-                      fontSize: 14,
-                    }}
-                    multiline={false}
-                    returnKeyType="send"
-                    onSubmitEditing={handleSend}
-                  />
-                  <Pressable
-                    onPress={handlePickImage}
-                    disabled={isUploading}
-                    className="ml-2"
-                  >
-                    {isUploading ? (
-                      <ActivityIndicator size="small" color="#28A712" />
-                    ) : (
-                      <ImagePlus size={20} color={isDark ? "#B5B5B5" : "#4A4A4A"} />
-                    )}
-                  </Pressable>
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <ThemedText
+                      family="primary"
+                      weight="bold"
+                      style={{
+                        fontSize: 15,
+                        lineHeight: 20,
+                        color: isDark ? "#FFFFFF" : "#1A1A1A",
+                      }}
+                    >
+                      {isTradeApproved ? "Trade Successful" : "Trade Cancelled"}
+                    </ThemedText>
+                    <ThemedText
+                      family="secondary"
+                      weight="regular"
+                      style={{
+                        fontSize: 13,
+                        lineHeight: 18,
+                        marginTop: 2,
+                        color: isDark ? "#9CA3AF" : "#555555",
+                      }}
+                    >
+                      {isTradeApproved
+                        ? "Your gift card trade has been completed."
+                        : "Your gift card trade has been cancelled."}
+                    </ThemedText>
+                  </View>
+                  {!isTradeApproved && (
+                    <Svg width={38} height={34} viewBox="0 0 24 22" fill="none">
+                      <Path
+                        d="M10.268 1.488C11.037.156 12.963.156 13.732 1.488l9.08 15.728C23.58 18.547 22.617 20.25 21.08 20.25H2.92C1.383 20.25.42 18.547 1.188 17.216l9.08-15.728z"
+                        fill="#EF4444"
+                      />
+                      <Path
+                        d="M12 6.5v6"
+                        stroke="#FFFFFF"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                      />
+                      <Path
+                        d="M12 16.25v.01"
+                        stroke="#FFFFFF"
+                        strokeWidth={2.5}
+                        strokeLinecap="round"
+                      />
+                    </Svg>
+                  )}
                 </View>
-
-                <Pressable
-                  onPress={handleSend}
-                  disabled={!inputText.trim() || isSending}
-                  style={{
-                    width: 68,
-                    height: 46,
-                    borderRadius: 20,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: !inputText.trim()
-                      ? (isDark ? "#4A4A4A" : "#B5B5B5")
-                      : (isDark ? "#28A712" : "#28A712"),
-                  }}
-                >
-                  <ThemedText
-                    family="primary"
-                    weight="medium"
-                    style={{
-                      fontSize: 14,
-                      lineHeight: 16.8,
-                      color: !inputText.trim()
-                        ? (isDark ? "#CECECE" : "#FFFFFF")
-                        : "#FFFFFF",
-                    }}
-                  >
-                    Send
-                  </ThemedText>
-                </Pressable>
               </View>
             </View>
-          </View>
+          ) : (
+            <View
+              className="pt-3 border-t bg-white dark:bg-[#111111]"
+              style={{
+                borderTopColor: isDark ? "#232323" : "#EFEFEF",
+                paddingBottom: Math.max(insets.bottom, 12),
+              }}
+            >
+              <View className="px-5">
+                <View className="flex-row items-center gap-2">
+                  <View
+                    style={{
+                      flex: 1,
+                      height: 46,
+                      borderRadius: 20,
+                      paddingHorizontal: 14,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: isDark ? "#0C0C0C" : "#FCFCFC",
+                      borderWidth: 0,
+                    }}
+                  >
+                    <TextInput
+                      value={inputText}
+                      onChangeText={setInputText}
+                      placeholder="Describe your issues"
+                      placeholderTextColor={isDark ? "#B5B5B5" : "#4A4A4A"}
+                      editable={true}
+                      className="flex-1 text-[14px] h-full"
+                      style={{
+                        color: isDark ? "#FFFFFF" : "#0C0C0C",
+                        fontSize: 14,
+                      }}
+                      multiline={false}
+                      returnKeyType="send"
+                      onSubmitEditing={handleSend}
+                    />
+                    <Pressable
+                      onPress={handlePickImage}
+                      disabled={isUploading}
+                      className="ml-2"
+                    >
+                      {isUploading ? (
+                        <ActivityIndicator size="small" color="#28A712" />
+                      ) : (
+                        <ImagePlus size={20} color={isDark ? "#B5B5B5" : "#4A4A4A"} />
+                      )}
+                    </Pressable>
+                  </View>
+
+                  <Pressable
+                    onPress={handleSend}
+                    disabled={!inputText.trim() || isSending}
+                    style={{
+                      width: 68,
+                      height: 46,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: !inputText.trim()
+                        ? (isDark ? "#4A4A4A" : "#B5B5B5")
+                        : (isDark ? "#28A712" : "#28A712"),
+                    }}
+                  >
+                    <ThemedText
+                      family="primary"
+                      weight="medium"
+                      style={{
+                        fontSize: 14,
+                        lineHeight: 16.8,
+                        color: !inputText.trim()
+                          ? (isDark ? "#CECECE" : "#FFFFFF")
+                          : "#FFFFFF",
+                      }}
+                    >
+                      Send
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
         </Animated.View>
 
         {/* End Chat Modal */}
