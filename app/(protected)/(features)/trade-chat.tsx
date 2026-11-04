@@ -1065,7 +1065,7 @@ const TradeChat = () => {
     // If chatInfo hasn't loaded yet and paramCount wasn't provided, wait for chatInfo
     if (!chatInfo && (isNaN(paramCount) || paramCount <= 0)) return;
 
-    const snapshot = computeUnreadSnapshot(messages, "customer", rawCount);
+    const snapshot = computeUnreadSnapshot(sortedMessages, "customer", rawCount);
     isUnreadSeededRef.current = true;
     unreadMessageIdsRef.current = new Set(snapshot.unreadIds);
     setUnreadMessageIds(new Set(snapshot.unreadIds));
@@ -1124,7 +1124,7 @@ const TradeChat = () => {
 
       const targetIdx = firstId ? chronologicalMessages.findIndex(m => m.id === firstId) : -1;
 
-      if (targetIdx > 0 && targetIdx < chronologicalMessages.length) {
+      if (targetIdx >= 0 && targetIdx < chronologicalMessages.length) {
 
         try {
 
@@ -1134,7 +1134,7 @@ const TradeChat = () => {
 
             animated: false,
 
-            viewPosition: 0, // 0 = item at top of viewport so divider (above bubble) is visible
+            viewPosition: 1, // 1 = in inverted list, aligns item to top of viewport so divider (above bubble) is at screen top
 
           });
 
@@ -1293,19 +1293,15 @@ const TradeChat = () => {
 
           useNativeDriver: false,
 
-        }).start(({ finished }) => {
+        }).start(() => {
 
-          if (finished) {
+          hasClearedUnreadRef.current = true;
 
-            hasClearedUnreadRef.current = true;
+          setIsUnreadCleared(true);
 
-            setIsUnreadCleared(true);
+          unreadMessageIdsRef.current.clear();
 
-            unreadMessageIdsRef.current.clear();
-
-            setUnreadMessageIds(new Set());
-
-          }
+          setUnreadMessageIds(new Set());
 
         });
 
@@ -2413,13 +2409,11 @@ const TradeChat = () => {
                     toValue: 0,
                     duration: UNREAD_CLEAR_ANIMATION_MS,
                     useNativeDriver: false,
-                  }).start(({ finished }) => {
-                    if (finished) {
-                      hasClearedUnreadRef.current = true;
-                      setIsUnreadCleared(true);
-                      unreadMessageIdsRef.current.clear();
-                      setUnreadMessageIds(new Set());
-                    }
+                  }).start(() => {
+                    hasClearedUnreadRef.current = true;
+                    setIsUnreadCleared(true);
+                    unreadMessageIdsRef.current.clear();
+                    setUnreadMessageIds(new Set());
                   });
                 }
               }}
@@ -2436,7 +2430,7 @@ const TradeChat = () => {
 
                       animated: false,
 
-                      viewPosition: 0, // keep consistent with initial scroll
+                      viewPosition: 1, // keep consistent with initial scroll (align to screen top)
 
                     });
 
