@@ -14,6 +14,8 @@ import {
 
   isChatMessageSystem,
 
+  isSentByCurrentUser,
+
   isInvertedNearBottom,
 
 } from "@/lib/chat-unread-tracker";
@@ -154,36 +156,8 @@ if (isKeyboardControllerLinked) {
 
 }
 
-const isSystemMessage = (m: { senderType?: string; type?: string; text?: string }) => {
-
-  if (m.senderType === "user") return false;
-
-  if (m.senderType === "system" || m.type === "status_update") return true;
-
-  const text = m.text?.toLowerCase().trim() || "";
-
-  if (!text) return false;
-
-  return (
-
-    text.includes("trade has been approved") ||
-
-    text.includes("funds would be sent soon") ||
-
-    text.includes("chat has been closed") ||
-
-    text.includes("trade has been rejected") ||
-
-    text.includes("trade approved") ||
-
-    text.includes("trade rejected") ||
-
-    text.includes("chat closed") ||
-
-    text.startsWith("reason:")
-
-  );
-
+const isSystemMessage = (m: { senderType?: string; type?: string; text?: string; sender?: string }) => {
+  return isChatMessageSystem(m);
 };
 
 const TradeChat = () => {
@@ -651,7 +625,11 @@ const TradeChat = () => {
 
   const lastReopenMsgIdx = sortedMessages.findLastIndex(
 
-    (m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been reopened")
+    (m) =>
+      isSystemMessage(m) &&
+      (m.text?.toLowerCase().includes("chat has been reopened") ||
+        m.text?.toLowerCase().includes("chat reopened") ||
+        m.text?.toLowerCase().includes("reopened"))
 
   );
 
@@ -681,6 +659,20 @@ const TradeChat = () => {
 
   );
 
+  const lastCancelMsgIdx = sortedMessages.findLastIndex(
+
+    (m) =>
+
+      isSystemMessage(m) &&
+
+      (m.text?.toLowerCase().includes("trade has been cancelled") ||
+
+        m.text?.toLowerCase().includes("trade cancelled") ||
+
+        m.text?.toLowerCase().includes("trade cancel"))
+
+  );
+
   const messageRejectReason = sortedMessages
 
     .filter((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("reason:"))
@@ -691,27 +683,34 @@ const TradeChat = () => {
 
     ?.trim();
 
-  // Find the latest lifecycle resolution index among close/reject/approve
+  // Find the latest lifecycle resolution index among close/reject/approve/cancel
 
-  const latestResolutionIdx = Math.max(lastClosedMsgIdx, lastRejectMsgIdx, lastApproveMsgIdx);
+  const latestResolutionIdx = Math.max(
+    lastClosedMsgIdx,
+    lastRejectMsgIdx,
+    lastApproveMsgIdx,
+    lastCancelMsgIdx
+  );
 
-  // A chat is explicitly REOPENED if:
+  // A chat is actively/currently REOPENED if:
 
-  // 1. A "Chat has been reopened" system message came AFTER the latest close/reject/approve message; OR
+  // 1. A reopen system message occurred after any close/reject/approve/cancel resolution message; OR
 
-  // 2. The Firestore document is explicitly active/open AND a reopen message exists in history
+  // 2. The Firestore document is explicitly open/active AND (reopen message exists OR tradeStatus is 'pending') AND no subsequent close message.
+
+  const isDocActive =
+    (chatInfo?.chatStatus === "open" || (chatInfo as any)?.status === "active") &&
+    chatInfo?.chatStatus !== "closed" &&
+    (chatInfo as any)?.status !== "closed" &&
+    (chatInfo as any)?.status !== "reject";
 
   const isExplicitlyReopened =
-
     lastReopenMsgIdx !== -1 && lastReopenMsgIdx > latestResolutionIdx;
 
   const isDocActiveAfterReopen =
-
-    (chatInfo?.chatStatus === "open" || (chatInfo as any)?.status === "active") &&
-
-    lastReopenMsgIdx !== -1 &&
-
-    lastReopenMsgIdx >= lastClosedMsgIdx;
+    isDocActive &&
+    (lastReopenMsgIdx !== -1 || (chatInfo as any)?.tradeStatus === "pending") &&
+    (lastClosedMsgIdx === -1 || lastReopenMsgIdx >= lastClosedMsgIdx);
 
   const isChatReopened = isExplicitlyReopened || isDocActiveAfterReopen;
 
@@ -743,7 +742,7 @@ const TradeChat = () => {
 
       (tradeData?.plan_status === 1 && !isChatReopened) ||
 
-      (lastApproveMsgIdx !== -1 && lastApproveMsgIdx > lastRejectMsgIdx && !isChatReopened));
+      (lastApproveMsgIdx !== -1 && lastApproveMsgIdx > Math.max(lastRejectMsgIdx, lastCancelMsgIdx)));
 
   const isTradeRejected =
 
@@ -761,7 +760,7 @@ const TradeChat = () => {
 
       (tradeData?.plan_status === 2 && !isChatReopened) ||
 
-      (lastRejectMsgIdx !== -1 && lastRejectMsgIdx > lastApproveMsgIdx && !isChatReopened));
+      (lastRejectMsgIdx !== -1 && lastRejectMsgIdx > Math.max(lastApproveMsgIdx, lastCancelMsgIdx)));
 
   const isTradeCancelled =
 
@@ -779,17 +778,7 @@ const TradeChat = () => {
 
       (chatInfo as any)?.status === "cancel" ||
 
-      sortedMessages.some(
-
-        (m) =>
-
-          isSystemMessage(m) &&
-
-          (m.text?.toLowerCase().includes("trade has been cancelled") ||
-
-            m.text?.toLowerCase().includes("trade cancelled"))
-
-      ));
+      lastCancelMsgIdx !== -1);
 
   const isTradePending = !isTradeApproved && !isTradeRejected && !isTradeCancelled;
 
@@ -859,25 +848,22 @@ const TradeChat = () => {
 
   // When reopened, it is strictly NOT closed.
 
+  const isDocClosed =
+    chatInfo?.chatStatus === "closed" ||
+    (chatInfo as any)?.status === "closed" ||
+    (chatInfo as any)?.status === "reject";
+
+  const isHistoryClosed =
+    latestResolutionIdx !== -1 && latestResolutionIdx >= lastReopenMsgIdx;
+
   const isChatClosed =
-
     !isChatReopened &&
-
-    (chatInfo?.chatStatus === "closed" ||
-
-      (chatInfo as any)?.status === "closed" ||
-
-      (chatInfo as any)?.status === "reject" ||
-
+    (isDocClosed ||
+      isHistoryClosed ||
       chatInfo?.tradeStatus === "rejected" ||
-
       isTradeApproved ||
-
       isTradeRejected ||
-
-      isTradeCancelled ||
-
-      (latestResolutionIdx !== -1 && lastReopenMsgIdx <= latestResolutionIdx));
+      isTradeCancelled);
 
   const rejectionReason =
 
@@ -1082,37 +1068,32 @@ const TradeChat = () => {
   // since it's the count at the moment the user tapped the row) with a fallback to Firestore fields.
 
   useEffect(() => {
+    if (messages.length === 0) return;
+    if (hasClearedUnreadRef.current) return;
 
-    if (!isUnreadSeededRef.current && messages.length > 0) {
+    const paramCount = params.initialUnreadCount ? Number(params.initialUnreadCount) : NaN;
+    const raw =
+      (!isNaN(paramCount) && paramCount > 0)
+        ? paramCount
+        : (chatInfo as any)?.unreadByCustomer ||
+          (chatInfo as any)?.unreadByUser ||
+          (chatInfo as any)?.unreadCount ||
+          0;
+    const rawCount = Math.max(0, Number(raw) || 0);
 
-      const paramCount = params.initialUnreadCount ? Number(params.initialUnreadCount) : NaN;
+    // If already seeded with valid unread IDs, don't re-seed
+    if (isUnreadSeededRef.current && unreadMessageIdsRef.current.size > 0) return;
 
-      const raw =
-        (!isNaN(paramCount) && paramCount > 0)
-          ? paramCount
-          : (chatInfo as any)?.unreadByCustomer ||
-            (chatInfo as any)?.unreadByUser ||
-            (chatInfo as any)?.unreadCount ||
-            0;
+    // If chatInfo hasn't loaded yet and paramCount wasn't provided, wait for chatInfo
+    if (!chatInfo && (isNaN(paramCount) || paramCount <= 0)) return;
 
-      const rawCount = Math.max(0, Number(raw) || 0);
-
-      const snapshot = computeUnreadSnapshot(messages, "customer", rawCount);
-
-      isUnreadSeededRef.current = true;
-
-      unreadMessageIdsRef.current = new Set(snapshot.unreadIds);
-
-      setUnreadMessageIds(new Set(snapshot.unreadIds));
-
-      firstUnreadMessageIdRef.current = snapshot.firstUnreadId;
-
-      setOpenUnreadCount(snapshot.unreadCount);
-
-      setFloatingUnreadCount(snapshot.unreadCount);
-
-    }
-
+    const snapshot = computeUnreadSnapshot(messages, "customer", rawCount);
+    isUnreadSeededRef.current = true;
+    unreadMessageIdsRef.current = new Set(snapshot.unreadIds);
+    setUnreadMessageIds(new Set(snapshot.unreadIds));
+    firstUnreadMessageIdRef.current = snapshot.firstUnreadId;
+    setOpenUnreadCount(snapshot.unreadCount);
+    setFloatingUnreadCount(snapshot.unreadCount);
   }, [messages, chatInfo, params.initialUnreadCount]);
 
   const formatTime = (timestamp: Timestamp | null | undefined) => {
@@ -1211,7 +1192,7 @@ const TradeChat = () => {
 
       const newAgentMessages = newMessages.filter(
 
-        (m) => m.senderType !== "user" && !isChatMessageSystem(m)
+        (m) => !isSentByCurrentUser(m, "customer") && !isChatMessageSystem(m)
 
       );
 
@@ -1372,7 +1353,7 @@ const TradeChat = () => {
 
     const isSystem = isChatMessageSystem(item);
 
-    const isUser = item.senderType === "user";
+    const isUser = isSentByCurrentUser(item, "customer");
 
     // Unread divider: appears strictly above the initial first unread agent message
 

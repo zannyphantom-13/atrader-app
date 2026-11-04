@@ -42,10 +42,30 @@ export function isSentByCurrentUser(
  * Checks if a message is a system notification message.
  */
 export function isChatMessageSystem(message: ChatMessageLike): boolean {
-  return (
+  if (
     message.type === "system" ||
+    message.type === "status_update" ||
     message.senderType === "system" ||
     message.sender === "system"
+  ) {
+    return true;
+  }
+  const text = message.text?.toLowerCase().trim() || "";
+  if (!text) return false;
+  return (
+    text.includes("trade has been approved") ||
+    text.includes("funds would be sent soon") ||
+    text.includes("trade approved") ||
+    text.includes("chat has been closed") ||
+    text.includes("chat closed") ||
+    text.includes("trade has been rejected") ||
+    text.includes("trade rejected") ||
+    text.includes("chat has been reopened") ||
+    text.includes("chat reopened") ||
+    text.includes("reopened") ||
+    text.includes("trade has been cancelled") ||
+    text.includes("trade cancelled") ||
+    text.startsWith("reason:")
   );
 }
 
