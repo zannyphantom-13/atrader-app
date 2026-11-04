@@ -1,4 +1,4 @@
-import { setGlobalActiveChatId, dismissChatNotification } from "@/lib/chat-state";
+﻿import { setGlobalActiveChatId, dismissChatNotification } from "@/lib/chat-state";
 import { markChatReadByUser } from "@/lib/firebase-chat-service";
 import EndChatModal from "@/components/modals/EndChatModal";
 import { TradeDetailsDrawer } from "@/components/modals/TradeDetailsDrawer";
@@ -316,8 +316,22 @@ const TradeChat = () => {
     "pending"
   ).toLowerCase();
 
-  // Check system messages for approval or rejection in case document state lagged
-  const hasApprovedMessage = messages?.some(
+  // If the Firestore document says the chat is currently open/active/pending,
+  // the chat was reopened — treat it as pending regardless of message history.
+  const isCurrentlyReopened =
+    chatInfo?.chatStatus === "open" ||
+    chatInfo?.tradeStatus === "pending" ||
+    (chatInfo as any)?.status === "active";
+
+  // Check system messages for approval or rejection in case document state lagged.
+  // Sort messages by timestamp so we know the LAST status event.
+  const sortedMessages = [...(messages || [])].sort((a, b) => {
+    const aT = a.createdAt?.seconds ?? 0;
+    const bT = b.createdAt?.seconds ?? 0;
+    return aT - bT;
+  });
+
+  const hasApprovedMessage = sortedMessages.some(
     (m) =>
       isSystemMessage(m) &&
       (m.text?.toLowerCase().includes("trade has been approved") ||
@@ -325,16 +339,29 @@ const TradeChat = () => {
         m.text?.toLowerCase().includes("trade approved"))
   );
 
-  const hasRejectedMessage = messages?.some(
+  const hasRejectedMessage = sortedMessages.some(
     (m) =>
       isSystemMessage(m) &&
       (m.text?.toLowerCase().includes("trade has been rejected") ||
         m.text?.toLowerCase().includes("trade rejected"))
   );
 
-  const messageRejectReason = messages
-    ?.filter((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("reason:"))
-    ?.slice(-1)[0]
+  // "Chat has been reopened" appearing AFTER the rejection cancels the rejected state.
+  const lastReopenIdx = sortedMessages.findLastIndex(
+    (m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been reopened")
+  );
+  const lastRejectIdx = sortedMessages.findLastIndex(
+    (m) =>
+      isSystemMessage(m) &&
+      (m.text?.toLowerCase().includes("trade has been rejected") ||
+        m.text?.toLowerCase().includes("trade rejected"))
+  );
+  // If a reopen event happened after the most recent rejection, cancel the rejected state.
+  const wasReopenedAfterRejection = lastReopenIdx !== -1 && lastReopenIdx > lastRejectIdx;
+
+  const messageRejectReason = sortedMessages
+    .filter((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("reason:"))
+    .slice(-1)[0]
     ?.text?.split(/reason:\s*/i)[1]
     ?.trim();
 
@@ -347,6 +374,9 @@ const TradeChat = () => {
 
   const isTradeRejected =
     !isTradeApproved &&
+    // Chat was explicitly reopened (Firestore or message history) — not rejected anymore
+    !isCurrentlyReopened &&
+    !wasReopenedAfterRejection &&
     (rawTradeStatus === "rejected" ||
       rawTradeStatus === "reject" ||
       rawTradeStatus === "failed" ||
@@ -379,13 +409,26 @@ const TradeChat = () => {
       ? (isDark ? "#EF4444" : "#E53935")
       : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
 
-  // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved
+  // A chat is considered closed when marked closed/reject in Firestore, or when trade is resolved.
   // General app support should ALWAYS remain open!
+  // If the chat was reopened (Firestore chatStatus: "open" or a "Chat has been reopened" system
+  // message appears AFTER the last "Chat has been closed" message), treat it as open.
+  const lastClosedMsgIdx = sortedMessages.findLastIndex(
+    (m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been closed")
+  );
+  const lastReopenMsgIdx = sortedMessages.findLastIndex(
+    (m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been reopened")
+  );
+  const hasBeenReopened =
+    isCurrentlyReopened ||
+    (lastReopenMsgIdx !== -1 && lastReopenMsgIdx > lastClosedMsgIdx);
+
   const isChatClosed =
     !isSupportChat &&
+    !hasBeenReopened &&
     (chatInfo?.chatStatus === "closed" ||
       (chatInfo as any)?.status === "closed" ||
-      Boolean(messages?.some((m) => isSystemMessage(m) && m.text?.toLowerCase().includes("chat has been closed"))));
+      (lastClosedMsgIdx !== -1 && lastReopenMsgIdx <= lastClosedMsgIdx));
 
   const rejectionReason =
     chatInfo?.rejectReason ||
@@ -1069,9 +1112,9 @@ const TradeChat = () => {
                       {tradeData?.total_amount
                         ? `$${formatNumber(tradeData.total_amount)}`
                         : `$${formatNumber(chatInfo?.cardAmount || params.cardAmount || "0")}`} ~ {tradeData?.estimated
-                          ? `₦${formatNumber(tradeData.estimated)}`
-                          : `₦${formatNumber(chatInfo?.settlementAmount || params.settlementAmount || "0")}`}
-                      {tradeData?.rate ? ` (@ ₦${tradeData.rate})` : ""}
+                          ? `â‚¦${formatNumber(tradeData.estimated)}`
+                          : `â‚¦${formatNumber(chatInfo?.settlementAmount || params.settlementAmount || "0")}`}
+                      {tradeData?.rate ? ` (@ â‚¦${tradeData.rate})` : ""}
                     </ThemedText>
                   </View>
                 </View>
@@ -1309,7 +1352,7 @@ const TradeChat = () => {
                 weight="medium"
                 style={{ fontSize: 13, color: isDark ? "#E7E7E7" : "#333" }}
               >
-                ↓ {floatingUnreadCount > 0 ? "New messages" : "Scroll to latest"}
+                â†“ {floatingUnreadCount > 0 ? "New messages" : "Scroll to latest"}
               </ThemedText>
             </Pressable>
           )}

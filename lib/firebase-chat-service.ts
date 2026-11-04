@@ -1,4 +1,4 @@
-import { isViewingChat, dismissChatNotification } from "./chat-state";
+﻿import { isViewingChat, dismissChatNotification } from "./chat-state";
 import {
   addDoc,
   collection,
@@ -228,21 +228,33 @@ export const createTradeChat = async (
  */
 export const getChatUnreadCount = (chat: any): number => {
   if (!chat) return 0;
-  // Rule 9: Closed chats carry no badge for system "closed" message
-  if (
-    chat.chatStatus === "closed" ||
-    chat.status === "closed" ||
-    chat.status === "reject" ||
-    chat.tradeStatus === "rejected"
-  ) {
-    if (
-      chat.lastMessageSender === "system" ||
-      !chat.lastMessageSender ||
-      String(chat.lastMessage || "").toLowerCase().includes("closed")
-    ) {
-      return 0;
+
+  // If chat is currently open/active (e.g. reopened after a rejection),
+  // always show the real unread count — never suppress it with stale closed state.
+  const isCurrentlyOpen =
+    chat.chatStatus === "open" ||
+    chat.status === "active" ||
+    chat.tradeStatus === "pending";
+
+  if (!isCurrentlyOpen) {
+    // Suppress badge for truly closed/rejected chats whose last activity is a system event
+    const isClosed =
+      chat.chatStatus === "closed" ||
+      chat.status === "closed" ||
+      chat.status === "reject" ||
+      chat.tradeStatus === "rejected";
+
+    if (isClosed) {
+      if (
+        chat.lastMessageSender === "system" ||
+        !chat.lastMessageSender ||
+        String(chat.lastMessage || "").toLowerCase().includes("closed")
+      ) {
+        return 0;
+      }
     }
   }
+
   const count = Math.max(
     Number(chat.unreadByCustomer || 0),
     Number(chat.unreadByUser || 0),
@@ -274,7 +286,7 @@ export const sendMessage = async (
   // Update the chat's last message and unread counts
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   const updateData: Record<string, any> = {
-    lastMessage: messageData.type === "image" ? "ðŸ“· Image" : messageData.text,
+    lastMessage: messageData.type === "image" ? "Ã°Å¸â€œÂ· Image" : messageData.text,
     lastMessageAt: serverTimestamp(),
     lastMessageSender: messageData.senderType,
     updatedAt: serverTimestamp(),
