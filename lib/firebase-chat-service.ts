@@ -45,6 +45,7 @@ export interface ChatDocument {
   settlementAmount: string;
   tradeStatus: TradeStatus | null;
   chatStatus: ChatStatus;
+  isClosed?: boolean;
   status?: string | null;
   rejectReason?: string | null;
   closedBy?: string | null;
@@ -266,12 +267,29 @@ export const getChatUnreadCount = (chat: any): number => {
 };
 
 /**
- * Send a message in a chat
+ * Send a message in a chat.
+ * Blocks user messages when the chat is closed (server-side guard).
+ * System messages from internal service calls are always allowed through.
  */
 export const sendMessage = async (
   chatId: string,
   messageData: Omit<MessageDocument, "id" | "createdAt">,
 ): Promise<string> => {
+  // Server-side closed-chat guard: only user messages are blocked.
+  // System messages (from closeChat/reopenChat/admin) are always permitted.
+  if (messageData.senderType === "user") {
+    const chatSnap = await getDoc(doc(db, CHATS_COLLECTION, chatId));
+    if (chatSnap.exists()) {
+      const chatData = chatSnap.data();
+      const isClosed =
+        chatData?.chatStatus === "closed" ||
+        chatData?.isClosed === true;
+      if (isClosed) {
+        throw new Error("CHAT_CLOSED");
+      }
+    }
+  }
+
   const messagesRef = collection(
     db,
     CHATS_COLLECTION,
@@ -567,45 +585,49 @@ export const updateChatPushToken = async (
 };
 
 /**
- * Close a chat (user clicks "End chat")
+ * Close a chat (user clicks "End chat" or admin selects Close).
+ * Preserves the existing tradeStatus — does not change Successful or Rejected.
+ * Sets isClosed: true and chatStatus: "closed".
+ * Gift Card Support (support_*) chats can never be closed.
  */
 export const closeChat = async (chatId: string): Promise<void> => {
-  // General app support can NEVER be closed
+  // Gift Card Support threads can NEVER be closed
   if (chatId.startsWith("support_")) {
-    console.log("[FirebaseChat] General app support cannot be closed.");
+    console.log("[FirebaseChat] Gift Card Support cannot be closed.");
     return;
   }
+
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
+
+  // Fetch current doc to check if already closed
+  const snap = await getDoc(chatRef);
+  if (!snap.exists()) return;
+  const current = snap.data();
+  if (current?.chatStatus === "closed" || current?.isClosed === true) {
+    console.log("[FirebaseChat] Chat already closed, skipping.");
+    return;
+  }
+
+  // Close the chat — preserve tradeStatus exactly as-is
   await updateDoc(chatRef, {
     chatStatus: "closed",
-    status: "closed",
+    isClosed: true,
     updatedAt: serverTimestamp(),
-  });
-
-  // Add system message
-  await sendMessage(chatId, {
-    senderId: "system",
-    senderName: "Atrader customer support",
-    senderAvatar: null,
-    senderType: "system",
-    type: "text",
-    text: "This chat has been closed.",
-    imageUrl: null,
-    metadata: null,
-    readByUser: true,
-    readByAgent: true,
   });
 };
 
 /**
- * Reopen a closed chat
+ * Reopen a closed trade chat.
+ * Resets tradeStatus to "pending", opens the chat, clears isClosed.
  */
 export const reopenChat = async (chatId: string): Promise<void> => {
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   await updateDoc(chatRef, {
     chatStatus: "open",
+    isClosed: false,
     status: "active",
     tradeStatus: "pending",
+    rejectReason: null,
     updatedAt: serverTimestamp(),
   });
 

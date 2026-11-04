@@ -3,25 +3,21 @@ import { useRouter } from "expo-router";
 import { useChatList } from "@/hooks/useChatList";
 import {
   createTradeChat,
-  findActiveUnassignedSupportChat,
   type ChatDocument,
 } from "@/lib/firebase-chat-service";
 import { useNotifications } from "@/context/NotificationsProvider";
 import { useAppSelector } from "@/redux/store";
 import { getAuth } from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 /**
- * Custom routing hook for Gift Card Support session lifecycle management:
+ * Custom routing hook for Gift Card Support (general support):
  *
- * - Unassigned State: Evaluates active session state. If an existing active, unassigned
- *   support thread is found, routes the user back to that existing thread view without
- *   spawning a new chat.
- *
- * - Assigned / Active Agent State: If the previous thread has an assigned agent (or if
- *   no active support session exists), clicking "Gift Card Issue" instantiates a new
- *   Gift Card Issue support request and registers it with the queue.
+ * Requirements:
+ * 1. It stays open at all times and never closes.
+ * 2. Each user has exactly ONE "Gift Card Support" thread. Never create duplicates.
+ * 3. Always reuse the existing support thread if it exists.
  */
 export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
   const router = useRouter();
@@ -30,7 +26,6 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
   const { expoPushToken } = useNotifications();
   const [isNavigating, setIsNavigating] = useState(false);
   // Synchronous lock — never released mid-navigation to prevent race conditions.
-  // Reset happens after a timeout post-navigation so rapid double-taps are blocked.
   const isNavigatingRef = useRef(false);
 
   const effectiveUserId =
@@ -48,44 +43,69 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
     setIsNavigating(true);
 
     try {
-      // 1. Unassigned State Check: evaluate existing active support threads in loaded list
-      let unassignedThread = findActiveUnassignedSupportChat(chats);
+      // 1. Helper to test if a chat doc is Gift Card Support
+      const isSupportDoc = (c: any) =>
+        c.type === "support" ||
+        c.chatType === "support" ||
+        c.cardCategory === "Support" ||
+        c.cardName === "Gift Card Support" ||
+        c.chatId === `support_${effectiveUserId}` ||
+        Boolean(c.chatId?.startsWith("support_"));
 
-      // Collect all candidate user identifiers to ensure exhaustive Firestore deduplication
-      const authUid = getAuth().currentUser?.uid || "";
-      const infoIdStr = userInfo?.id ? String(userInfo.id) : "";
-      const rawCandidateIds = [userIdProp, effectiveUserId, authUid, infoIdStr].filter(Boolean) as string[];
-      const candidateIds = Array.from(new Set(rawCandidateIds.map((s) => String(s).trim()))).filter((s) => s.length > 0);
+      // 2. Check local loaded chats first
+      let existingSupport = chats?.find(isSupportDoc);
 
-      // Always verify directly against Firestore if unassigned thread was not in local snapshot.
-      // This catches cases where the local useChatList snapshot hasn't refreshed yet.
-      if (!unassignedThread && candidateIds.length > 0) {
+      // 3. If not in local list, check Firestore directly
+      if (!existingSupport) {
+        const canonicalId = `support_${effectiveUserId}`;
         try {
-          const chatsRef = collection(db, "chats");
-          // Query up to 10 candidate IDs (Firestore "in" limit)
-          const chatsQuery =
-            candidateIds.length === 1
-              ? query(chatsRef, where("userId", "==", candidateIds[0]))
-              : query(chatsRef, where("userId", "in", candidateIds.slice(0, 10)));
-          const snap = await getDocs(chatsQuery);
-          const fetchedChats = snap.docs.map((d) => ({
-            ...d.data(),
-            chatId: d.id,
-          }) as ChatDocument);
-          unassignedThread = findActiveUnassignedSupportChat(fetchedChats);
-        } catch (fetchErr) {
-          console.warn("[GiftCardSupportRouting] Direct query fallback error:", fetchErr);
+          const directSnap = await getDoc(doc(db, "chats", canonicalId));
+          if (directSnap.exists()) {
+            existingSupport = {
+              ...directSnap.data(),
+              chatId: directSnap.id,
+            } as ChatDocument;
+          }
+        } catch (e) {
+          console.warn("[GiftCardSupportRouting] Direct canonical doc check notice:", e);
         }
       }
 
-      if (unassignedThread) {
+      if (!existingSupport) {
+        // Collect candidate user IDs to search existing threads
+        const authUid = getAuth().currentUser?.uid || "";
+        const infoIdStr = userInfo?.id ? String(userInfo.id) : "";
+        const rawCandidateIds = [userIdProp, effectiveUserId, authUid, infoIdStr].filter(Boolean) as string[];
+        const candidateIds = Array.from(new Set(rawCandidateIds.map((s) => String(s).trim()))).filter((s) => s.length > 0);
+
+        if (candidateIds.length > 0) {
+          try {
+            const chatsRef = collection(db, "chats");
+            const chatsQuery =
+              candidateIds.length === 1
+                ? query(chatsRef, where("userId", "==", candidateIds[0]))
+                : query(chatsRef, where("userId", "in", candidateIds.slice(0, 10)));
+            const snap = await getDocs(chatsQuery);
+            const fetchedChats = snap.docs.map((d) => ({
+              ...d.data(),
+              chatId: d.id,
+            })) as ChatDocument[];
+            existingSupport = fetchedChats.find(isSupportDoc);
+          } catch (fetchErr) {
+            console.warn("[GiftCardSupportRouting] Direct query error:", fetchErr);
+          }
+        }
+      }
+
+      // If existing support thread is found, route immediately to it
+      if (existingSupport) {
         console.log(
-          `[GiftCardSupportRouting] Found active unassigned thread: ${unassignedThread.chatId}. Re-routing to existing thread.`
+          `[GiftCardSupportRouting] Found existing support thread: ${existingSupport.chatId}. Routing to it.`
         );
         router.push({
           pathname: "/(protected)/(features)/trade-chat" as any,
           params: {
-            chatId: unassignedThread.chatId,
+            chatId: existingSupport.chatId,
             tradeId: "",
             cardName: "Gift Card Support",
             cardCategory: "Support",
@@ -93,18 +113,17 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
             isSupport: "true",
           },
         });
-        return unassignedThread.chatId;
+        return existingSupport.chatId;
       }
 
-      // 2. Assigned / Active Agent State: Previous thread has an assigned agent (or no active thread exists).
-      // Instantiate a new, independent Gift Card Issue support request.
-      const newChatId = `support_${effectiveUserId}_${Date.now()}`;
+      // 4. No existing thread found anywhere: create the single deterministic thread
+      const canonicalChatId = `support_${effectiveUserId}`;
       console.log(
-        `[GiftCardSupportRouting] Previous session assigned or none active. Initializing new support request: ${newChatId}`
+        `[GiftCardSupportRouting] No support thread found. Initializing single canonical support request: ${canonicalChatId}`
       );
 
       const createdChatId = await createTradeChat({
-        chatId: newChatId,
+        chatId: canonicalChatId,
         tradeId: "",
         userId: effectiveUserId,
         userName: userInfo?.name || userInfo?.username || "User",
@@ -132,13 +151,10 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
       return createdChatId;
     } catch (error) {
       console.error("[GiftCardSupportRouting] Routing error:", error);
-      // Only release lock on error so the user can try again
       isNavigatingRef.current = false;
       setIsNavigating(false);
       return null;
     } finally {
-      // On success: keep isNavigating true for 4 s to block rapid re-taps while navigation animates.
-      // isNavigatingRef is NOT reset here on success path — that is handled by the timeout below.
       setTimeout(() => {
         isNavigatingRef.current = false;
         setIsNavigating(false);
@@ -149,7 +165,7 @@ export const useGiftCardSupportRouting = (userIdProp?: string | null) => {
   return {
     routeGiftCardSupport,
     isNavigating,
-    activeUnassignedChat: findActiveUnassignedSupportChat(chats),
+    activeUnassignedChat: chats?.find((c: ChatDocument) => c.chatId?.startsWith("support_") || c.cardName === "Gift Card Support"),
     chats,
     isLoading,
   };

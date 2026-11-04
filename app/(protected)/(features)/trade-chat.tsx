@@ -703,6 +703,7 @@ const TradeChat = () => {
   const isDocActive =
     (chatInfo?.chatStatus === "open" || (chatInfo as any)?.status === "active") &&
     chatInfo?.chatStatus !== "closed" &&
+    (chatInfo as any)?.isClosed !== true &&
     (chatInfo as any)?.status !== "closed" &&
     (chatInfo as any)?.status !== "reject";
 
@@ -716,37 +717,38 @@ const TradeChat = () => {
 
   const isChatReopened = isExplicitlyReopened || isDocActiveAfterReopen;
 
-  // Normalize trade status
+  // Canonical isClosed: driven purely by Firestore fields (isClosed flag takes priority)
+  const isDocClosed =
+    (chatInfo as any)?.isClosed === true ||
+    chatInfo?.chatStatus === "closed" ||
+    (chatInfo as any)?.status === "closed" ||
+    (chatInfo as any)?.status === "reject";
 
+  // Normalize trade status — Firestore is the single source of truth.
+  // After a reopen, tradeStatus is reset to "pending" in Firestore, so
+  // rawTradeStatus will be "pending" and approved/rejected flags will be false.
   const rawTradeStatus = String(
-
     chatInfo?.tradeStatus ||
-
-    (chatInfo as any)?.status ||
-
-    (tradeData?.plan_status === 1 ? "approved" : tradeData?.plan_status === 2 ? "rejected" : null) ||
-
+    // Only fall back to tradeData if the chat has NOT been reopened
+    (!isChatReopened && (tradeData?.plan_status === 1 ? "approved" : tradeData?.plan_status === 2 ? "rejected" : null)) ||
     "pending"
-
   ).toLowerCase();
 
   // When a chat has been reopened, only resolutions that happened AFTER the reopen count
   // toward approving or rejecting this current session.
   const isPostReopen = lastReopenMsgIdx !== -1;
 
-  // 1. Approved: admin selected Approve (either in current session after reopen, or initially)
+  // 1. Approved: tradeStatus is "successful"/"approved" and chat is not in reopened-pending state
   const isTradeApproved =
     !isChatReopened &&
-    (isPostReopen
-      ? (lastApproveMsgIdx > lastReopenMsgIdx ||
-          ((chatInfo?.tradeStatus as string) === "approved" && (chatInfo as any)?.status === "closed"))
-      : (rawTradeStatus === "approved" ||
-          rawTradeStatus === "successful" ||
-          rawTradeStatus === "success" ||
-          (tradeData?.plan_status === 1 && !isChatReopened) ||
-          (lastApproveMsgIdx !== -1 && lastApproveMsgIdx > Math.max(lastRejectMsgIdx, lastCancelMsgIdx))));
+    (rawTradeStatus === "approved" ||
+      rawTradeStatus === "successful" ||
+      rawTradeStatus === "success" ||
+      (isPostReopen
+        ? lastApproveMsgIdx > lastReopenMsgIdx
+        : (lastApproveMsgIdx !== -1 && lastApproveMsgIdx > Math.max(lastRejectMsgIdx, lastCancelMsgIdx))));
 
-  // 2. Rejected: admin selected Reject (either in current session after reopen, or initially)
+  // 2. Rejected: tradeStatus is "rejected" and chat is not in reopened-pending state
   const isTradeRejected =
     !isChatReopened &&
     !isTradeApproved &&
@@ -774,25 +776,17 @@ const TradeChat = () => {
           (chatInfo as any)?.status === "cancel" ||
           lastCancelMsgIdx !== -1));
 
-  // 4. Closed: chat was closed in Firestore or message history
-  const isDocClosed =
-    chatInfo?.chatStatus === "closed" ||
-    (chatInfo as any)?.status === "closed" ||
-    (chatInfo as any)?.status === "reject";
-
+  // 4. Closed: driven by isClosed flag (set above) — separate from tradeStatus
+  // isDocClosed is now defined above for reopen detection.
+  // isChatClosed means the input is hidden; it does NOT affect the trade banner.
   const isHistoryClosed =
     latestResolutionIdx !== -1 && latestResolutionIdx >= lastReopenMsgIdx;
 
   const isChatClosed =
     !isChatReopened &&
-    (isDocClosed ||
-      isHistoryClosed ||
-      chatInfo?.tradeStatus === "rejected" ||
-      isTradeApproved ||
-      isTradeRejected ||
-      isTradeCancelled);
+    (isDocClosed || isHistoryClosed);
 
-  // 5. Just Closed: closed without Approve, Reject, or Cancel selected
+  // 5. Just Closed: closed without Approve or Reject (admin used Close directly — not allowed by new rules, but keep for legacy data)
   const isTradeJustClosed =
     isChatClosed &&
     !isTradeApproved &&
@@ -2422,7 +2416,12 @@ const TradeChat = () => {
 
           )}
 
-          {/* Trade Status Bar (appears when trade is resolved) - stays with End chat when successful */}
+          {/* Trade Status Bar:
+              - Shown when trade is Successful or Rejected (regardless of closed state)
+              - Hidden when Pending or reopened
+              - "End chat" button shown only when NOT yet closed
+              - When closed: banner remains but End chat button is removed
+          */}
 
           {!isSupportChat && (isTradeApproved || isTradeRejected) && !isChatReopened && (
 
@@ -2492,7 +2491,7 @@ const TradeChat = () => {
 
                       fontSize: 14,
 
-                      lineHeight: 18.2, // 130% line-height (14 * 1.3)
+                      lineHeight: 18.2,
 
                       letterSpacing: 0,
 
@@ -2514,61 +2513,65 @@ const TradeChat = () => {
 
                 </View>
 
-                {/* End chat pill button */}
+                {/* End chat pill button — only shown when chat is NOT yet closed */}
 
-                <Pressable
+                {!isChatClosed && (
 
-                  onPress={handleEndChat}
+                  <Pressable
 
-                  style={{
-
-                    width: 84,
-
-                    height: 35,
-
-                    borderRadius: 100,
-
-                    paddingTop: 6,
-
-                    paddingBottom: 6,
-
-                    paddingLeft: 12,
-
-                    paddingRight: 12,
-
-                    alignItems: "center",
-
-                    justifyContent: "center",
-
-                    backgroundColor: isDark ? "rgba(35, 35, 35, 1)" : "#E5E5E5",
-
-                  }}
-
-                >
-
-                  <ThemedText
-
-                    family="primary"
-
-                    weight="medium"
+                    onPress={handleEndChat}
 
                     style={{
 
-                      fontSize: 14,
+                      width: 84,
 
-                      lineHeight: 19.2,
+                      height: 35,
 
-                      color: isDark ? "#FFFFFF" : "#111111",
+                      borderRadius: 100,
+
+                      paddingTop: 6,
+
+                      paddingBottom: 6,
+
+                      paddingLeft: 12,
+
+                      paddingRight: 12,
+
+                      alignItems: "center",
+
+                      justifyContent: "center",
+
+                      backgroundColor: isDark ? "rgba(35, 35, 35, 1)" : "#E5E5E5",
 
                     }}
 
                   >
 
-                    End chat
+                    <ThemedText
 
-                  </ThemedText>
+                      family="primary"
 
-                </Pressable>
+                      weight="medium"
+
+                      style={{
+
+                        fontSize: 14,
+
+                        lineHeight: 19.2,
+
+                        color: isDark ? "#FFFFFF" : "#111111",
+
+                      }}
+
+                    >
+
+                      End chat
+
+                    </ThemedText>
+
+                  </Pressable>
+
+                )}
 
               </View>
 
@@ -2708,9 +2711,21 @@ const TradeChat = () => {
 
           )}
 
-          {/* Input Bar or Closed Trade Banner */}
+          {/* Input Bar:
+              - Hidden completely when closed with trade banner (banner above shows the state)
+              - Shows legacy "Chat Closed" card for just-closed chats with no trade outcome
+              - Shown normally when pending or successful/rejected but not yet closed
+              - Support chats: always visible
+          */}
 
-          {isChatClosed ? (
+          {isChatClosed && (isTradeApproved || isTradeRejected) && !isChatReopened ? (
+
+            <View
+              onLayout={(e) => setInputBarHeight(e.nativeEvent.layout.height)}
+              style={{ paddingBottom: Math.max(insets.bottom, 8), backgroundColor: isDark ? "#111111" : "#FFFFFF" }}
+            />
+
+          ) : isChatClosed && isTradeJustClosed ? (
 
             <View
 
@@ -2732,39 +2747,9 @@ const TradeChat = () => {
 
                 {(() => {
 
-                  const outcome: "successful" | "cancelled" | "rejected" | "closed" = isTradeApproved
-
-                    ? "successful"
-
-                    : isTradeRejected
-
-                      ? "rejected"
-
-                      : isTradeCancelled
-
-                        ? "cancelled"
-
-                        : "closed";
+                  const outcome: "cancelled" | "closed" = isTradeCancelled ? "cancelled" : "closed";
 
                   const config = {
-
-                    successful: {
-
-                      title: "Trade Successful",
-
-                      subtitle: "Your gift card trade has been completed.",
-
-                      bg: isDark ? "#0e2311" : "#F0FDF4",
-
-                      border: isDark ? "#1b4d22" : "#DCFCE7",
-
-                      titleColor: isDark ? "#4ade80" : "#166534",
-
-                      subtitleColor: isDark ? "#86efac" : "#15803d",
-
-                      icon: "success",
-
-                    },
 
                     cancelled: {
 
@@ -2779,24 +2764,6 @@ const TradeChat = () => {
                       titleColor: isDark ? "#FFFFFF" : "#1A1A1A",
 
                       subtitleColor: isDark ? "#9CA3AF" : "#555555",
-
-                      icon: "warning",
-
-                    },
-
-                    rejected: {
-
-                      title: "Trade Rejected",
-
-                      subtitle: rejectionReason ? `Reason: ${rejectionReason}` : "Your gift card trade has been rejected.",
-
-                      bg: isDark ? "#231715" : "#FFF7F4",
-
-                      border: isDark ? "#38221D" : "#FDE6DE",
-
-                      titleColor: isDark ? "#FFFFFF" : "#1A1A1A",
-
-                      subtitleColor: isDark ? "#EF4444" : "#DC2626",
 
                       icon: "warning",
 
@@ -2965,20 +2932,6 @@ const TradeChat = () => {
                           />
 
                         </Svg>
-
-                      )}
-
-                      {config.icon === "success" && (
-
-                        <Image
-
-                          source={img.tradeSuccessful}
-
-                          style={{ width: 44, height: 44 }}
-
-                          resizeMode="contain"
-
-                        />
 
                       )}
 
