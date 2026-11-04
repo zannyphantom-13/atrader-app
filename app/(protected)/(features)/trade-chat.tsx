@@ -800,7 +800,8 @@ const TradeChat = () => {
   // - "Successful" (green) when approved
   // - "Rejected" (red) when rejected
   // - "Cancelled" (red) when cancelled
-  // - "Closed" (neutral gray) when just closed without approve/reject selected
+  // Note: "Closed" is intentionally NOT shown here — when a chat is closed its underlying
+  // trade result (Pending/Successful/Rejected/Cancelled) is displayed instead.
   const displayStatusText = isChatReopened
     ? "Pending"
     : isTradeApproved
@@ -809,9 +810,7 @@ const TradeChat = () => {
         ? "Rejected"
         : isTradeCancelled
           ? "Cancelled"
-          : isTradeJustClosed
-            ? "Closed"
-            : "Pending";
+          : "Pending";
 
   const statusColor = isChatReopened
     ? "#F59E0B"
@@ -819,9 +818,7 @@ const TradeChat = () => {
       ? (isDark ? "#37C415" : "#28A712")
       : (isTradeRejected || isTradeCancelled)
         ? (isDark ? "#EF4444" : "#E53935")
-        : isTradeJustClosed
-          ? (isDark ? "#A1A1AA" : "#6B7280")
-          : "#F59E0B";
+        : "#F59E0B";
 
   const statusBgColor = isChatReopened
     ? (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB")
@@ -829,9 +826,7 @@ const TradeChat = () => {
       ? (isDark ? "#0B2E02" : "#E8FFE4")
       : (isTradeRejected || isTradeCancelled)
         ? (isDark ? "#300808" : "#FFE8E8")
-        : isTradeJustClosed
-          ? (isDark ? "rgba(161, 161, 170, 0.15)" : "#F3F4F6")
-          : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
+        : (isDark ? "rgba(245, 158, 11, 0.18)" : "#FFFBEB");
 
   const statusBorderColor = isChatReopened
     ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A")
@@ -839,9 +834,7 @@ const TradeChat = () => {
       ? (isDark ? "#37C415" : "#28A712")
       : (isTradeRejected || isTradeCancelled)
         ? (isDark ? "#EF4444" : "#E53935")
-        : isTradeJustClosed
-          ? (isDark ? "#3F3F46" : "#E5E7EB")
-          : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
+        : (isDark ? "rgba(245, 158, 11, 0.35)" : "#FDE68A");
 
   const rejectionReason =
 
@@ -987,8 +980,8 @@ const TradeChat = () => {
 
         if (chatId) {
 
-          // Don't mark as read on focus — let the user see the unread divider and green highlights first.
-        // Clearing happens automatically when they scroll to the bottom or send a message.
+          // Mark as read in Firestore now that the user has scrolled to the bottom
+          markChatReadByUser(chatId).catch(() => {});
 
         }
 
@@ -1079,6 +1072,14 @@ const TradeChat = () => {
     firstUnreadMessageIdRef.current = snapshot.firstUnreadId;
     setOpenUnreadCount(snapshot.unreadCount);
     setFloatingUnreadCount(snapshot.unreadCount);
+
+    // If there are no unreads at open time, mark read immediately so the
+    // chat list badge clears without requiring a scroll event.
+    if (snapshot.unreadCount === 0 && chatId) {
+      hasClearedUnreadRef.current = true;
+      setIsUnreadCleared(true);
+      markChatReadByUser(chatId).catch(() => {});
+    }
   }, [messages, chatInfo, params.initialUnreadCount]);
 
   const formatTime = (timestamp: Timestamp | null | undefined) => {
@@ -1133,7 +1134,7 @@ const TradeChat = () => {
 
             animated: false,
 
-            viewPosition: 0.5,
+            viewPosition: 0, // 0 = item at top of viewport so divider (above bubble) is visible
 
           });
 
@@ -1190,6 +1191,14 @@ const TradeChat = () => {
           flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
 
           if (chatId) markChatReadByUser(chatId).catch(() => {});
+
+          // Also clear local divider/unread state so the badge and divider disappear immediately
+          hasClearedUnreadRef.current = true;
+          setIsUnreadCleared(true);
+          unreadMessageIdsRef.current.clear();
+          setUnreadMessageIds(new Set());
+          setOpenUnreadCount(0);
+          setFloatingUnreadCount(0);
 
         } else {
 
@@ -1271,8 +1280,8 @@ const TradeChat = () => {
 
         if (chatId) {
 
-          // Don't mark as read on focus — let the user see the unread divider and green highlights first.
-        // Clearing happens automatically when they scroll to the bottom or send a message.
+          // Mark as read in Firestore now that the user has scrolled to the bottom
+          markChatReadByUser(chatId).catch(() => {});
 
         }
 
@@ -2386,6 +2395,35 @@ const TradeChat = () => {
 
               scrollEventThrottle={100}
 
+              onContentSizeChange={(_w, _contentH) => {
+                // If content fits in the viewport without scrolling, the scroll event never fires.
+                // isNearBottomRef starts true; use this callback to trigger the read-clear
+                // the same way handleScroll would when nearBottom.
+                if (
+                  isNearBottomRef.current &&
+                  !isClearingUnreadRef.current &&
+                  !hasClearedUnreadRef.current &&
+                  (openUnreadCount > 0 || unreadMessageIdsRef.current.size > 0)
+                ) {
+                  isClearingUnreadRef.current = true;
+                  setOpenUnreadCount(0);
+                  setFloatingUnreadCount(0);
+                  if (chatId) markChatReadByUser(chatId).catch(() => {});
+                  RNAnimated.timing(unreadAnim, {
+                    toValue: 0,
+                    duration: UNREAD_CLEAR_ANIMATION_MS,
+                    useNativeDriver: false,
+                  }).start(({ finished }) => {
+                    if (finished) {
+                      hasClearedUnreadRef.current = true;
+                      setIsUnreadCleared(true);
+                      unreadMessageIdsRef.current.clear();
+                      setUnreadMessageIds(new Set());
+                    }
+                  });
+                }
+              }}
+
               onScrollToIndexFailed={(info) => {
 
                 setTimeout(() => {
@@ -2398,7 +2436,7 @@ const TradeChat = () => {
 
                       animated: false,
 
-                      viewPosition: 0.5,
+                      viewPosition: 0, // keep consistent with initial scroll
 
                     });
 
@@ -2713,7 +2751,6 @@ const TradeChat = () => {
 
           {/* Input Bar:
               - Hidden completely when closed with trade banner (banner above shows the state)
-              - Shows legacy "Chat Closed" card for just-closed chats with no trade outcome
               - Shown normally when pending or successful/rejected but not yet closed
               - Support chats: always visible
           */}
@@ -2724,226 +2761,6 @@ const TradeChat = () => {
               onLayout={(e) => setInputBarHeight(e.nativeEvent.layout.height)}
               style={{ paddingBottom: Math.max(insets.bottom, 8), backgroundColor: isDark ? "#111111" : "#FFFFFF" }}
             />
-
-          ) : isChatClosed && isTradeJustClosed ? (
-
-            <View
-
-              onLayout={(e) => setInputBarHeight(e.nativeEvent.layout.height)}
-
-              className="pt-3 border-t bg-white dark:bg-[#111111]"
-
-              style={{
-
-                borderTopColor: isDark ? "#232323" : "#EFEFEF",
-
-                paddingBottom: Math.max(insets.bottom, 16),
-
-              }}
-
-            >
-
-              <View className="px-5">
-
-                {(() => {
-
-                  const outcome: "cancelled" | "closed" = isTradeCancelled ? "cancelled" : "closed";
-
-                  const config = {
-
-                    cancelled: {
-
-                      title: "Trade Cancelled",
-
-                      subtitle: "Your gift card trade has been cancelled.",
-
-                      bg: isDark ? "#231715" : "#FFF7F4",
-
-                      border: isDark ? "#38221D" : "#FDE6DE",
-
-                      titleColor: isDark ? "#FFFFFF" : "#1A1A1A",
-
-                      subtitleColor: isDark ? "#9CA3AF" : "#555555",
-
-                      icon: "warning",
-
-                    },
-
-                    closed: {
-
-                      title: "Chat Closed",
-
-                      subtitle: "This chat has been closed by customer support.",
-
-                      bg: isDark ? "#18181B" : "#F4F4F5",
-
-                      border: isDark ? "#27272A" : "#E4E4E7",
-
-                      titleColor: isDark ? "#FFFFFF" : "#18181B",
-
-                      subtitleColor: isDark ? "#A1A1AA" : "#71717A",
-
-                      icon: "closed",
-
-                    },
-
-                  }[outcome];
-
-                  return (
-
-                    <View
-
-                      style={{
-
-                        borderRadius: 18,
-
-                        backgroundColor: config.bg,
-
-                        borderWidth: 1,
-
-                        borderColor: config.border,
-
-                        paddingHorizontal: 16,
-
-                        paddingVertical: 14,
-
-                        flexDirection: "row",
-
-                        alignItems: "center",
-
-                        justifyContent: "space-between",
-
-                      }}
-
-                    >
-
-                      <View style={{ flex: 1, marginRight: 12 }}>
-
-                        <ThemedText
-
-                          family="primary"
-
-                          weight="bold"
-
-                          style={{
-
-                            fontSize: 15,
-
-                            lineHeight: 20,
-
-                            color: config.titleColor,
-
-                          }}
-
-                        >
-
-                          {config.title}
-
-                        </ThemedText>
-
-                        <ThemedText
-
-                          family="secondary"
-
-                          weight="regular"
-
-                          style={{
-
-                            fontSize: 13,
-
-                            lineHeight: 18,
-
-                            marginTop: 2,
-
-                            color: config.subtitleColor,
-
-                          }}
-
-                        >
-
-                          {config.subtitle}
-
-                        </ThemedText>
-
-                      </View>
-
-                      {config.icon === "warning" && (
-
-                        <Svg width={38} height={34} viewBox="0 0 24 22" fill="none">
-
-                          <Path
-
-                            d="M10.268 1.488C11.037.156 12.963.156 13.732 1.488l9.08 15.728C23.58 18.547 22.617 20.25 21.08 20.25H2.92C1.383 20.25.42 18.547 1.188 17.216l9.08-15.728z"
-
-                            fill="#EF4444"
-
-                          />
-
-                          <Path
-
-                            d="M12 6.5v6"
-
-                            stroke="#FFFFFF"
-
-                            strokeWidth={2}
-
-                            strokeLinecap="round"
-
-                          />
-
-                          <Path
-
-                            d="M12 16.25v.01"
-
-                            stroke="#FFFFFF"
-
-                            strokeWidth={2.5}
-
-                            strokeLinecap="round"
-
-                          />
-
-                        </Svg>
-
-                      )}
-
-                      {config.icon === "closed" && (
-
-                        <Svg width={38} height={38} viewBox="0 0 24 24" fill="none">
-
-                          <Path
-
-                            d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"
-
-                            fill={isDark ? "#3F3F46" : "#D1D5DB"}
-
-                          />
-
-                          <Path
-
-                            d="M15 9l-6 6M9 9l6 6"
-
-                            stroke="#FFFFFF"
-
-                            strokeWidth={2}
-
-                            strokeLinecap="round"
-
-                          />
-
-                        </Svg>
-
-                      )}
-
-                    </View>
-
-                  );
-
-                })()}
-
-              </View>
-
-            </View>
 
           ) : (
 
