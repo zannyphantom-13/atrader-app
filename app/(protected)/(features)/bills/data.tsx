@@ -30,6 +30,7 @@ import { app_config } from "@/utils/config";
 import { paths } from "@/utils/paths";
 import { TokenManager } from "@/utils/secure-store-adapter";
 import { CowrieService } from "@/services/cowrie-service";
+import { saveLocalTransaction } from "@/services/local-transaction-service";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -77,6 +78,7 @@ const Data = () => {
   const [showDataModal, setShowDataModal] = React.useState(false);
   const [showSuccessModal, setShowSuccessModal] = React.useState(false);
   const [transactionId, setTransactionId] = React.useState<string>("");
+  const [cowrieReceiptData, setCowrieReceiptData] = React.useState<any>(null);
   const { width: deviceWidth } = Dimensions.get("window");
   const [selectedAmount, setSelectedAmount] = React.useState("");
   const router = useRouter();
@@ -227,6 +229,23 @@ const Data = () => {
         setShowDataModal(false);
         setPin("");
         setTransactionId(cowrieRes.transid || cowrieRes.reference || "");
+        const tid = cowrieRes.transid || cowrieRes.reference || ("DAT-" + Date.now().toString(16).toUpperCase());
+        const receipt = {
+          id: tid,
+          transid: tid,
+          role: "data",
+          message: `${activeNetwork?.name || formData.network} Data Purchase`,
+          network: activeNetwork?.name || formData.network,
+          plan_name: selectedPlan?.name || bundleCode,
+          plan_phone: formData.number,
+          amount: formData.amount,
+          plan_status: 1,
+          status: "success",
+          plan_date: new Date().toISOString(),
+          date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+        };
+        await saveLocalTransaction(receipt);
+        setCowrieReceiptData(receipt);
         toast.showToast(cowrieRes.message || "Data Purchase Successful", "success");
         setShowSuccessModal(true);
         return;
@@ -729,14 +748,26 @@ const Data = () => {
           onClose={() => setShowSuccessModal(false)}
           onViewReceipt={() => {
             setShowSuccessModal(false);
-            // Navigate to receipt
-            router.push({
-              pathname: paths.detailtransaction,
-              params: {
-                transId: transactionId,
-                type: "data",
-              },
-            });
+            // For Cowrie purchases, navigate to billReceipt with local data (backend has no record)
+            // For backend purchases, navigate to detailtransaction for server lookup
+            if (cowrieReceiptData) {
+              router.push({
+                pathname: paths.detailtransaction,
+                params: {
+                  transId: transactionId,
+                  type: "data",
+                  receiptData: JSON.stringify(cowrieReceiptData),
+                },
+              });
+            } else {
+              router.push({
+                pathname: paths.detailtransaction,
+                params: {
+                  transId: transactionId,
+                  type: "data",
+                },
+              });
+            }
           }}
           billType="data"
           amount={formData.amount}

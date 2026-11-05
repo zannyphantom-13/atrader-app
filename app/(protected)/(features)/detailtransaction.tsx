@@ -16,6 +16,7 @@ import { app_config } from "@/utils/config";
 import { formatNumber, getCurrencySymbol } from "@/utils/formatamount";
 import { paths } from "@/utils/paths";
 import { TokenManager } from "@/utils/secure-store-adapter";
+import { getLocalTransactionById } from "@/services/local-transaction-service";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -112,7 +113,7 @@ const AllDetailTransaction = () => {
   const [currentAdminImageIndex, setcurrentAdminImageIndex] = React.useState(0);
   const toast = useToast();
   const [getAllTypeDetailTransaction, { isLoading }] = useGetAllTypeDetailTransactionMutation();
-  const { type, transId } = params as { type: string; transId: string };
+  const { type, transId, receiptData } = params as { type: string; transId: string; receiptData?: string };
   const { isDark } = useTheme();
   // console.log(type)
   const copyToClipboard = async (text: string, label: string) => {
@@ -151,7 +152,12 @@ const AllDetailTransaction = () => {
               : "failed",
         );
       } else {
-        Alert.alert("Error", "Failed to fetch transaction details");
+        setData((curr: any) => {
+          if (!curr) {
+            Alert.alert("Error", "Failed to fetch transaction details");
+          }
+          return curr;
+        });
       }
     } catch (error) {
       console.error("Error fetching transaction details:", error);
@@ -159,8 +165,46 @@ const AllDetailTransaction = () => {
   };
 
   React.useEffect(() => {
-    if (transId) handleGetDetailTransaction();
-  }, [transId, type]);
+    let isMounted = true;
+    if (receiptData) {
+      try {
+        const parsed = typeof receiptData === "string" ? JSON.parse(receiptData) : receiptData;
+        if (parsed) {
+          setData(parsed);
+          setTradeStatus(
+            parsed?.plan_status === 0
+              ? "pending"
+              : parsed?.plan_status === 1
+                ? "success"
+                : "failed"
+          );
+        }
+      } catch (e) {
+        console.error("Failed to parse receiptData param:", e);
+      }
+    } else if (transId) {
+      getLocalTransactionById(transId).then((local) => {
+        if (isMounted && local) {
+          setData(local);
+          setTradeStatus(
+            local?.plan_status === 0
+              ? "pending"
+              : local?.plan_status === 1
+                ? "success"
+                : "failed"
+          );
+        }
+      });
+    }
+
+    if (transId) {
+      handleGetDetailTransaction();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [transId, type, receiptData]);
 
 
   const navigateThem = async () => {
@@ -238,8 +282,12 @@ const AllDetailTransaction = () => {
     ];
     const commonAfter = [
       { label: "Transaction ID", value: data?.transid, isCopyable: true },
-      { label: "Old Balance", value: `₦${formatNumber(data?.oldbal || data?.old_bal)}` },
-      { label: "New Balance", value: `₦${formatNumber(data?.newbal || data?.new_bal)}` },
+      ...(data?.oldbal != null || data?.old_bal != null
+        ? [{ label: "Old Balance", value: `₦${formatNumber(data?.oldbal || data?.old_bal)}` }]
+        : []),
+      ...(data?.newbal != null || data?.new_bal != null
+        ? [{ label: "New Balance", value: `₦${formatNumber(data?.newbal || data?.new_bal)}` }]
+        : []),
     ];
 
     switch (type) {
@@ -399,7 +447,7 @@ const AllDetailTransaction = () => {
       />
       <ThemedView className="flex-1 pt-5 px-[20px]">
         <SafeAreaView className="flex-1" edges={["bottom"]} style={{ paddingBottom: 20 }}>
-          {isLoading ? (
+          {isLoading && !data ? (
             <SkeletonLoader />
           ) : !data ? (
             <View className="flex-col items-center justify-center pt-16 px-4">

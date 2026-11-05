@@ -28,6 +28,7 @@ import { app_config } from "@/utils/config";
 import { paths } from "@/utils/paths";
 import { TokenManager } from "@/utils/secure-store-adapter";
 import { CowrieService } from "@/services/cowrie-service";
+import { saveLocalTransaction } from "@/services/local-transaction-service";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -83,6 +84,7 @@ const Airtime = () => {
   const [showPlanTypeModal, setShowPlanTypeModal] = React.useState(false);
   const [showSuccessModal, setShowSuccessModal] = React.useState(false);
   const [transactionId, setTransactionId] = React.useState("");
+  const [cowrieReceiptData, setCowrieReceiptData] = React.useState<any>(null);
   const [showNetworkDropdown, setShowNetworkDropdown] = React.useState(false);
   const [isBeneficiaryExpanded, setIsBeneficiaryExpanded] = React.useState(false);
   const { width: deviceWidth } = Dimensions.get("window");
@@ -183,6 +185,22 @@ const Airtime = () => {
         setShowAirtimeModal(false);
         setPin("");
         setTransactionId(cowrieRes.transid || cowrieRes.reference || "");
+        const tid = cowrieRes.transid || cowrieRes.reference || ("AIR-" + Date.now().toString(16).toUpperCase());
+        const receipt = {
+          id: tid,
+          transid: tid,
+          role: "airtime",
+          message: `${activeNetwork?.name || formData.network} Airtime Purchase`,
+          network: activeNetwork?.name || formData.network,
+          plan_phone: formData.number,
+          amount: formData.amount,
+          plan_status: 1,
+          status: "success",
+          plan_date: new Date().toISOString(),
+          date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+        };
+        await saveLocalTransaction(receipt);
+        setCowrieReceiptData(receipt);
         toast.showToast(cowrieRes.message || "Airtime Purchase Successful", "success");
         setShowSuccessModal(true);
         return;
@@ -647,10 +665,21 @@ const Airtime = () => {
           onClose={() => setShowSuccessModal(false)}
           onViewReceipt={() => {
             setShowSuccessModal(false);
-            router.push({
-              pathname: paths.detailtransaction,
-              params: { transId: transactionId, type: "airtime" },
-            });
+            if (cowrieReceiptData) {
+              router.push({
+                pathname: paths.detailtransaction,
+                params: {
+                  transId: transactionId,
+                  type: "airtime",
+                  receiptData: JSON.stringify(cowrieReceiptData),
+                },
+              });
+            } else {
+              router.push({
+                pathname: paths.detailtransaction,
+                params: { transId: transactionId, type: "airtime" },
+              });
+            }
           }}
           billType="airtime"
           amount={formData.amount}

@@ -8,6 +8,7 @@ import { useAuth } from "@/guards/guard";
 import { ServiceIcon } from "@/components/customs/serviceIcon";
 import PickTypeModal from "@/components/modals/pick-giftcard-crypto";
 import { TransactionSkeleton } from "@/components/skeletons/transactionskeleton";
+import { getLocalTransactions } from "@/services/local-transaction-service";
 import { useAppSelector } from "@/redux/store";
 import { useGetAllTransactionMutation } from "@/redux/transaction/transaction_history";
 import app_colors from "@/styles/color";
@@ -160,8 +161,9 @@ const TransactionItem = ({ transaction }: { transaction: any }) => {
     router.push({
       pathname: paths.detailtransaction,
       params: {
-        transId: transaction?.transid,
+        transId: transaction?.transid || transaction?.id,
         type: transaction?.role,
+        receiptData: JSON.stringify(transaction),
       },
     });
   };
@@ -337,9 +339,21 @@ const Home = () => {
         },
       }).unwrap();
 
-      if (response.status === "success") {
-        setTransactions(response?.transactions || []);
+      const serverTx = response.status === "success" ? (response?.transactions || []) : [];
+      const localTx = await getLocalTransactions();
+
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      for (const item of [...localTx, ...serverTx]) {
+        const key = (item.transid || item.id)?.toString();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          merged.push(item);
+        } else if (!key) {
+          merged.push(item);
+        }
       }
+      setTransactions(merged.slice(0, 5));
       console.log(response)
     } catch (error) {
       console.error("Error fetching transactions:", error);

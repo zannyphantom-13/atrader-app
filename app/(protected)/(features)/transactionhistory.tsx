@@ -5,6 +5,7 @@ import { TransactionSkeleton } from "@/components/skeletons/transactionskeleton"
 import { ThemedText } from "@/components/theme/themeText";
 import { ThemedView } from "@/components/theme/themeView";
 import { defaultCategories } from "@/constant/data";
+import { getLocalTransactions } from "@/services/local-transaction-service";
 import { img } from "@/constant/image";
 import { useTheme } from "@/context/ThemeProvider";
 import { useGetAllTransactionMutation } from "@/redux/transaction/transaction_history";
@@ -30,8 +31,9 @@ const TransactionItem = ({ transaction }: { transaction: any }) => {
     router.push({
       pathname: paths.detailtransaction,
       params: {
-        transId: transaction?.transid,
+        transId: transaction?.transid || transaction?.id,
         type: transaction?.role,
+        receiptData: JSON.stringify(transaction),
       },
     });
   };
@@ -185,29 +187,72 @@ const Transactionhistory = () => {
             status: selectedStatus || undefined,
           },
         }).unwrap();
-        if (response && response.status === "success") {
-          if (isLoadMore) {
-            // Append to existing transactions for pagination
-            setData((prev: any[]) => [
-              ...prev,
-              ...(response.transactions || []),
-            ]);
-          } else {
-            // Replace transactions for initial load or refresh
-            setData(response?.transactions || []);
+        const serverTransactions: any[] = (response && response.status === "success" && Array.isArray(response.transactions))
+          ? response.transactions
+          : [];
+
+        // Retrieve locally stored transactions (e.g. airtime / data)
+        const localAll = await getLocalTransactions();
+        const filteredLocal = localAll.filter((lt) => {
+          if (selectedCategory && lt.role?.toLowerCase() !== selectedCategory.toLowerCase()) return false;
+          if (selectedStatus) {
+            const st = lt.plan_status === 1 ? "successful" : lt.plan_status === 0 ? "pending" : "failed";
+            if (st !== selectedStatus.toLowerCase()) return false;
+          }
+          return true;
+        });
+
+        if (isLoadMore) {
+          setData((prev: any[]) => {
+            const prevIds = new Set(prev.map((p) => (p.transid || p.id)?.toString()));
+            const newItems = serverTransactions.filter((s: any) => !prevIds.has((s.transid || s.id)?.toString()));
+            return [...prev, ...newItems];
+          });
+        } else {
+          const seenIds = new Set<string>();
+          const merged: any[] = [];
+
+          for (const item of filteredLocal) {
+            const key = (item.transid || item.id)?.toString();
+            if (key && !seenIds.has(key)) {
+              seenIds.add(key);
+              merged.push(item);
+            }
           }
 
-          // Update pagination info
-          if (response.pagination) {
-            setHasMore(
-              response.pagination?.current_page <
-              response.pagination?.last_page,
-            );
-            setPage(response.pagination?.current_page);
+          for (const item of serverTransactions) {
+            const key = (item.transid || item.id)?.toString();
+            if (key && !seenIds.has(key)) {
+              seenIds.add(key);
+              merged.push(item);
+            } else if (!key) {
+              merged.push(item);
+            }
           }
+
+          setData(merged);
+        }
+
+        // Update pagination info
+        if (response?.pagination) {
+          setHasMore(
+            response.pagination?.current_page <
+            response.pagination?.last_page,
+          );
+          setPage(response.pagination?.current_page);
         }
       } catch (error) {
         console.error("Error fetching transactions:", error);
+        if (!isLoadMore) {
+          try {
+            const localAll = await getLocalTransactions();
+            const filteredLocal = localAll.filter((lt) => {
+              if (selectedCategory && lt.role?.toLowerCase() !== selectedCategory.toLowerCase()) return false;
+              return true;
+            });
+            if (filteredLocal.length > 0) setData(filteredLocal);
+          } catch (e) {}
+        }
       } finally {
         if (isLoadMore) {
           setIsLoadingMore(false);

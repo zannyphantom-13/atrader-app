@@ -30,7 +30,7 @@ const Billsreceipt = () => {
   const [getAllTypeDetailTransaction, { isLoading }] =
     useGetAllTypeDetailTransactionMutation();
   const toast = useToast();
-  const { type, transId } = params;
+  const { type, transId, receiptData } = params as { type: string; transId: string; receiptData?: string };
   const { isDark } = useTheme();
   // const { atex } = useAppSelector((state) => state.session);
   // const { atex } = useAuthToken();
@@ -64,10 +64,17 @@ const Billsreceipt = () => {
   };
 
   React.useEffect(() => {
-    if (transId) {
+    if (receiptData) {
+      // Cowrie transaction: use locally-stored receipt data (backend has no record)
+      try {
+        setData(JSON.parse(receiptData as string));
+      } catch (e) {
+        console.error("Failed to parse receiptData param:", e);
+      }
+    } else if (transId) {
       handleGetDetailTransaction();
     }
-  }, [transId, type]);
+  }, [transId, type, receiptData]);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
