@@ -1,6 +1,6 @@
 import { setGlobalActiveChatId, dismissChatNotification } from "@/lib/chat-state";
 
-import { markChatReadByUser } from "@/lib/firebase-chat-service";
+import { markChatReadByUser, getChatUnreadCount } from "@/lib/firebase-chat-service";
 
 import {
 
@@ -241,6 +241,15 @@ const TradeChat = () => {
 
         setGlobalActiveChatId(null);
 
+        // Safety net: if the user saw the latest message, never leave the chat list badge stale.
+        if (
+          chatId &&
+          hasSeenLatestRef.current &&
+          (chatUnreadRef.current > 0 || unreadMessageIdsRef.current.size > 0)
+        ) {
+          markChatReadByUser(chatId).catch(() => {});
+        }
+
       };
 
     }, [chatId])
@@ -256,6 +265,14 @@ const TradeChat = () => {
     isClearingUnreadRef.current = false;
 
     hasClearedUnreadRef.current = false;
+
+    hasSeenLatestRef.current = false;
+
+    latestViewableRef.current = false;
+
+    initialScrollDoneRef.current = false;
+
+    readSyncedRef.current = false;
 
     firstUnreadMessageIdRef.current = null;
 
@@ -300,6 +317,18 @@ const TradeChat = () => {
   const [isUnreadCleared, setIsUnreadCleared] = useState<boolean>(false);
 
   const unreadAnim = useRef(new RNAnimated.Value(1)).current;
+
+  // Read-tracking refs (visibility based)
+  // true once the newest message has been on screen
+  const hasSeenLatestRef = useRef<boolean>(false);
+  // whether the newest message is currently on screen
+  const latestViewableRef = useRef<boolean>(false);
+  // true once the initial "scroll to first unread" has settled; read-clearing is blocked before that
+  const initialScrollDoneRef = useRef<boolean>(false);
+  // true once we've written "read" to Firestore for the current unread episode
+  const readSyncedRef = useRef<boolean>(false);
+  // latest unread counter coming from the chat document
+  const chatUnreadRef = useRef<number>(0);
 
   // Scroll-position tracking for unread counter behaviour
 
@@ -380,6 +409,20 @@ const TradeChat = () => {
   const { messages, chatInfo, isLoading, isSending, isUploading, sendText, sendImage, endChat, markAllAsRead } =
 
     useFirebaseChat(chatId, userId, userName, userAvatar || "");
+
+  const chatUnread = getChatUnreadCount(chatInfo);
+  chatUnreadRef.current = chatUnread;
+
+  // If the chat doc still reports unread (stale/late counter) while the user has already seen
+  // the latest message, write "read" again so the chat list badge cannot revert.
+  useEffect(() => {
+    if (!chatId || chatUnread <= 0) return;
+    if (!hasSeenLatestRef.current || !initialScrollDoneRef.current) return;
+    const t = setTimeout(() => {
+      markChatReadByUser(chatId).catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [chatId, chatUnread]);
 
   // Continuously ensure active chat document has customer's current push token
 
@@ -1150,6 +1193,16 @@ const TradeChat = () => {
 
       }
 
+      // Once the initial scroll has settled, allow "seen" detection. If the newest message is
+      // already on screen (short chat / single unread) mark the chat read now.
+      setTimeout(() => {
+        initialScrollDoneRef.current = true;
+        if (latestViewableRef.current) {
+          hasSeenLatestRef.current = true;
+          startClearUnreadRef.current();
+        }
+      }, 600);
+
     }, 120);
 
     return () => clearTimeout(timer);
@@ -1226,6 +1279,10 @@ const TradeChat = () => {
 
           unreadAnim.setValue(1);
 
+          hasSeenLatestRef.current = false;
+
+          readSyncedRef.current = false;
+
           isClearingUnreadRef.current = false;
 
           hasClearedUnreadRef.current = false;
@@ -1244,13 +1301,93 @@ const TradeChat = () => {
 
   }, [chronologicalMessages.length, chatId]);
 
+  // Single place that marks the chat as read: writes to Firestore once per unread episode
+  // and plays the divider fade-out. Safe to call repeatedly.
+  const startClearUnread = useCallback(() => {
+
+    const hasUnread = unreadMessageIdsRef.current.size > 0 || chatUnreadRef.current > 0;
+
+    if (chatId && hasUnread && !readSyncedRef.current) {
+
+      readSyncedRef.current = true;
+
+      markChatReadByUser(chatId).catch(() => {
+
+        readSyncedRef.current = false;
+
+      });
+
+    }
+
+    setOpenUnreadCount(0);
+
+    setFloatingUnreadCount(0);
+
+    if (isClearingUnreadRef.current || hasClearedUnreadRef.current) return;
+
+    if (unreadMessageIdsRef.current.size === 0) {
+
+      hasClearedUnreadRef.current = true;
+
+      setIsUnreadCleared(true);
+
+      return;
+
+    }
+
+    isClearingUnreadRef.current = true;
+
+    RNAnimated.timing(unreadAnim, {
+
+      toValue: 0,
+
+      duration: UNREAD_CLEAR_ANIMATION_MS,
+
+      useNativeDriver: false,
+
+    }).start(() => {
+
+      hasClearedUnreadRef.current = true;
+
+      setIsUnreadCleared(true);
+
+      unreadMessageIdsRef.current.clear();
+
+      setUnreadMessageIds(new Set());
+
+    });
+
+  }, [chatId]);
+
+  const startClearUnreadRef = useRef<() => void>(() => {});
+
+  startClearUnreadRef.current = startClearUnread;
+
+  // Visibility-based read detection: as soon as the newest message (index 0 of the inverted
+  // list) is on screen, the chat counts as read. No scrolling to the very bottom is required.
+  const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 50, minimumViewTime: 150 });
+
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: any[] }) => {
+
+    const sawLatest = viewableItems.some((v) => v.index === 0);
+
+    latestViewableRef.current = sawLatest;
+
+    if (sawLatest && initialScrollDoneRef.current) {
+
+      hasSeenLatestRef.current = true;
+
+      startClearUnreadRef.current();
+
+    }
+
+  });
+
   const handleScroll = useCallback((event: any) => {
 
     const offsetY = event.nativeEvent.contentOffset.y;
 
     const nearBottom = isInvertedNearBottom(offsetY, BOTTOM_SCROLL_THRESHOLD);
-
-    const wasNearBottom = isNearBottomRef.current;
 
     isNearBottomRef.current = nearBottom;
 
@@ -1258,62 +1395,22 @@ const TradeChat = () => {
 
       setShowScrollButton(false);
 
-      // Arrived at bottom: trigger animated clear if unreads exist and not already clearing
+      // Fallback for very tall last messages that never reach the visibility threshold
+      if (initialScrollDoneRef.current) {
 
-      if (
+        hasSeenLatestRef.current = true;
 
-        !isClearingUnreadRef.current &&
-
-        !hasClearedUnreadRef.current &&
-
-        (openUnreadCount > 0 || unreadMessageIdsRef.current.size > 0)
-
-      ) {
-
-        isClearingUnreadRef.current = true;
-
-        // Reset unread count in data and local state AT ANIMATION START
-
-        setOpenUnreadCount(0);
-
-        setFloatingUnreadCount(0);
-
-        if (chatId) {
-
-          // Mark as read in Firestore now that the user has scrolled to the bottom
-          markChatReadByUser(chatId).catch(() => {});
-
-        }
-
-        RNAnimated.timing(unreadAnim, {
-
-          toValue: 0,
-
-          duration: UNREAD_CLEAR_ANIMATION_MS,
-
-          useNativeDriver: false,
-
-        }).start(() => {
-
-          hasClearedUnreadRef.current = true;
-
-          setIsUnreadCleared(true);
-
-          unreadMessageIdsRef.current.clear();
-
-          setUnreadMessageIds(new Set());
-
-        });
+        startClearUnreadRef.current();
 
       }
 
-    } else {
+    } else if (offsetY > BOTTOM_SCROLL_THRESHOLD * 2) {
 
       setShowScrollButton(true);
 
     }
 
-  }, [chatId, openUnreadCount]);
+  }, []);
 
   const handleImagePress = (messageId: string) => {
 
@@ -2391,32 +2488,17 @@ const TradeChat = () => {
 
               scrollEventThrottle={100}
 
-              onContentSizeChange={(_w, _contentH) => {
-                // If content fits in the viewport without scrolling, the scroll event never fires.
-                // isNearBottomRef starts true; use this callback to trigger the read-clear
-                // the same way handleScroll would when nearBottom.
-                if (
-                  isNearBottomRef.current &&
-                  !isClearingUnreadRef.current &&
-                  !hasClearedUnreadRef.current &&
-                  (openUnreadCount > 0 || unreadMessageIdsRef.current.size > 0)
-                ) {
-                  isClearingUnreadRef.current = true;
-                  setOpenUnreadCount(0);
-                  setFloatingUnreadCount(0);
-                  if (chatId) markChatReadByUser(chatId).catch(() => {});
-                  RNAnimated.timing(unreadAnim, {
-                    toValue: 0,
-                    duration: UNREAD_CLEAR_ANIMATION_MS,
-                    useNativeDriver: false,
-                  }).start(() => {
-                    hasClearedUnreadRef.current = true;
-                    setIsUnreadCleared(true);
-                    unreadMessageIdsRef.current.clear();
-                    setUnreadMessageIds(new Set());
-                  });
+              onContentSizeChange={() => {
+                // Content that fits on screen never fires a scroll event, so re-check here.
+                if (initialScrollDoneRef.current && isNearBottomRef.current) {
+                  hasSeenLatestRef.current = true;
+                  startClearUnreadRef.current();
                 }
               }}
+
+              onViewableItemsChanged={onViewableItemsChangedRef.current}
+
+              viewabilityConfig={viewabilityConfigRef.current}
 
               onScrollToIndexFailed={(info) => {
 
