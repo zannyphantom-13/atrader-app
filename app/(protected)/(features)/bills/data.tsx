@@ -197,35 +197,15 @@ const Data = () => {
 
   const [isCowrieLoading, setIsCowrieLoading] = React.useState(false);
 
-  const getPlanTypeData = async (network: string, category: string) => {
-    // 1. Primary authoritative Cowrie plans for the selected network and category
+  const getPlanTypeData = (network: string, category: string) => {
+    // Primary authoritative Cowrie plans - no background overwrite to prevent flickering or refreshing back
     const cowrieBundles = CowrieService.getDataPlans(network, category);
     setPlanTypeData(cowrieBundles);
-
-    // 2. Check backend in background if available
-    const atex = await TokenManager.getToken();
-    if (atex) {
-      try {
-        const response: any = await getPlanType({
-          data: {
-            token: atex,
-            network: network || "mtn",
-            time: category || "Weekly",
-          },
-        }).unwrap();
-
-        if (response.status === "success" && response.data_plans && response.data_plans.length > 0) {
-          setPlanTypeData(response.data_plans);
-        }
-      } catch (error: any) {
-        // Fallback to cowrieBundles
-      }
-    }
   };
 
   React.useEffect(() => {
-    getPlanTypeData(formData.network, activePlanType);
-  }, [formData.network, activePlanType]);
+    getPlanTypeData(formData.network || activeNetwork?.id || "mtn", activePlanType);
+  }, [formData.network, activeNetwork, activePlanType]);
 
   const PurchaseData = async () => {
     setIsCowrieLoading(true);
@@ -644,14 +624,34 @@ const Data = () => {
                       >
                         {item.name || `${item.size} - ${item.duration}`}
                       </ThemedText>
-                      <ThemedText
-                        className="text-xs text-gray-500 dark:text-gray-400 mt-1"
-                        numberOfLines={2}
-                      >
-                        {item.description ? `${item.duration} • ${item.description}` : item.duration}
-                      </ThemedText>
+
+                      {/* Plan Description & Bonus info */}
+                      {item.description ? (
+                        <ThemedText
+                          className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
+                          numberOfLines={2}
+                        >
+                          {item.duration} • {item.description}
+                        </ThemedText>
+                      ) : (
+                        <ThemedText
+                          className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
+                        >
+                          {item.duration}
+                        </ThemedText>
+                      )}
+
+                      {/* Prominent SMS / USSD Activation Badge */}
+                      {item.ussd && (
+                        <View className="mt-1.5 self-start px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/50 border border-primary-300 dark:border-primary-800">
+                          <ThemedText className="text-[11px] font-secondary-bold text-primary-700 dark:text-primary-300">
+                            📱 {item.ussd}
+                          </ThemedText>
+                        </View>
+                      )}
                     </View>
-                    <View className="items-end">
+
+                    <View className="items-end justify-center">
                       <ThemedText
                         family="secondary"
                         className="text-b1 font-bold text-primary-500"
@@ -659,7 +659,7 @@ const Data = () => {
                         ₦{Number(item.amount).toLocaleString()}
                       </ThemedText>
                       {formData.planId === item.plan_id && (
-                        <ThemedText className="text-primary-500 text-xs font-bold mt-0.5">
+                        <ThemedText className="text-primary-500 text-xs font-bold mt-1">
                           ✓ Selected
                         </ThemedText>
                       )}
