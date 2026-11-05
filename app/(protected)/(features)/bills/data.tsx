@@ -641,14 +641,7 @@ const Data = () => {
                         </ThemedText>
                       )}
 
-                      {/* Prominent SMS / USSD Activation Badge */}
-                      {item.ussd && (
-                        <View className="mt-1.5 self-start px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/50 border border-primary-300 dark:border-primary-800">
-                          <ThemedText className="text-[11px] font-secondary-bold text-primary-700 dark:text-primary-300">
-                            📱 {item.ussd}
-                          </ThemedText>
-                        </View>
-                      )}
+
                     </View>
 
                     <View className="items-end justify-center">
