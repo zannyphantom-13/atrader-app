@@ -96,6 +96,70 @@ export interface CreateChatParams {
   chatType?: ChatType;
 }
 
+/** Gift Card Support: general, never-closed chat. Not a trade. */
+export const isGiftCardSupportChat = (chat: any): boolean => {
+  if (!chat) return false;
+  const id = String(chat.chatId || chat.id || "");
+  return (
+    chat.type === "support" ||
+    chat.chatType === "support" ||
+    chat.cardCategory === "Support" ||
+    chat.cardName === "Gift Card Support" ||
+    chat.isSupport === true ||
+    chat.isSupport === "true" ||
+    id.startsWith("support_")
+  );
+};
+
+/** Closed is an explicit flag, never a trade result. Support chats cannot be closed. */
+export const isTradeChatClosed = (chat: any): boolean => {
+  if (!chat || isGiftCardSupportChat(chat)) return false;
+  return (
+    chat.isClosed === true ||
+    chat.chatStatus === "closed" ||
+    (chat.status === "closed" && !chat.tradeStatus)
+  );
+};
+
+export const hasTradeDecision = (chat: any): boolean => {
+  if (!chat || isGiftCardSupportChat(chat)) return false;
+  const s = String(chat.tradeStatus || "").toLowerCase();
+  return (
+    s === "successful" ||
+    s === "approved" ||
+    s === "success" ||
+    s === "rejected" ||
+    s === "reject" ||
+    s === "failed"
+  );
+};
+
+/** A pending trade (no Approve/Reject yet) must not be closable. */
+export const canCloseTradeChat = (chat: any): boolean => {
+  if (!chat || isGiftCardSupportChat(chat)) return false;
+  if (isTradeChatClosed(chat)) return false;
+  return hasTradeDecision(chat);
+};
+
+const getChatTimestampMillis = (ts: any): number => {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === "function") return ts.toMillis();
+  if (ts.seconds) return ts.seconds * 1000 + (ts.nanoseconds || 0) / 1e6;
+  if (typeof ts === "string") return new Date(ts).getTime();
+  if (ts instanceof Date) return ts.getTime();
+  return 0;
+};
+
+/** App Support is a separate Zoho row. Gift Card Support is pinned; trades sort by latest message. */
+export const sortCustomerChatList = (chats: ChatDocument[]): ChatDocument[] => {
+  return [...chats].sort((a, b) => {
+    const aSupport = isGiftCardSupportChat(a) ? 1 : 0;
+    const bSupport = isGiftCardSupportChat(b) ? 1 : 0;
+    if (aSupport !== bSupport) return bSupport - aSupport;
+    return getChatTimestampMillis(b.lastMessageAt) - getChatTimestampMillis(a.lastMessageAt);
+  });
+};
+
 // ============================================
 // Chat Operations
 // ============================================
@@ -110,10 +174,16 @@ const CHAT_QUEUE_COLLECTION = "chatQueue";
 export const createTradeChat = async (
   params: CreateChatParams,
 ): Promise<string> => {
+  const isSupport =
+    params.chatType === "support" ||
+    Boolean(params.chatId?.startsWith("support_")) ||
+    params.cardCategory === "Support" ||
+    params.cardName === "Gift Card Support";
+
   const chatId =
     params.chatId ||
-    (params.chatType === "support"
-      ? `support_${params.userId}_${Date.now()}`
+    (isSupport
+      ? `support_${params.userId}`
       : `trade_${params.tradeId}`);
 
   // Check if chat already exists
@@ -129,9 +199,12 @@ export const createTradeChat = async (
       if (params.userExpoPushToken) {
         existingUpdates.userExpoPushToken = params.userExpoPushToken;
       }
-      if (params.chatType === "support" || chatId.startsWith("support_")) {
+      if (isSupport || params.chatType === "support" || chatId.startsWith("support_")) {
         existingUpdates.chatStatus = "open";
         existingUpdates.status = "open";
+        existingUpdates.isClosed = false;
+        existingUpdates.tradeStatus = null;
+        existingUpdates.type = "support";
       }
       try {
         await updateDoc(chatRef, existingUpdates);
@@ -159,8 +232,8 @@ export const createTradeChat = async (
     lastMessageAt: ReturnType<typeof serverTimestamp>;
   } = {
     chatId,
-    type: params.chatType || "trade",
-    tradeId: params.tradeId || null,
+    type: isSupport ? "support" : (params.chatType || "trade"),
+    tradeId: isSupport ? null : (params.tradeId || null),
     userId: params.userId,
     userName: params.userName,
     userAvatar: params.userAvatar || null,
@@ -170,12 +243,15 @@ export const createTradeChat = async (
     cardImage: params.cardImage || null,
     cardAmount: params.cardAmount,
     settlementAmount: params.settlementAmount,
-    tradeStatus: "pending",
+    tradeStatus: isSupport ? null : "pending",
     chatStatus: "open",
+    isClosed: false,
     assignedAgent: null,
     assignedAgentName: null,
     assignedRole: null,
-    lastMessage: `Hello ${params.userName} you submitted a trade of a ${params.cardName} gift card and your trade is currently ongoing.`,
+    lastMessage: isSupport
+      ? `Hello ${params.userName}, how may we help you today?`
+      : `Hello ${params.userName} you submitted a trade of a ${params.cardName} gift card and your trade is currently ongoing.`,
     lastMessageAt: serverTimestamp(),
     lastMessageSender: "system",
     unreadByUser: 0,
@@ -198,7 +274,7 @@ export const createTradeChat = async (
     senderAvatar: null,
     senderType: "system",
     type: "text",
-    text: `${chatId.startsWith("support_") ? `Hello ${params.userName}, how may we help you today?` : `Hello ${params.userName} you submitted a trade of a ${params.cardName} gift card and your trade is currently ongoing.`}`,
+    text: `${isSupport ? `Hello ${params.userName}, how may we help you today?` : `Hello ${params.userName} you submitted a trade of a ${params.cardName} gift card and your trade is currently ongoing.`}`,
     imageUrl: null,
     metadata: null,
     readByUser: true, // Welcome message is not an unread agent message for user
@@ -232,27 +308,14 @@ export const getChatUnreadCount = (chat: any): number => {
 
   // If chat is currently open/active (e.g. reopened after a rejection),
   // always show the real unread count — never suppress it with stale closed state.
-  const isCurrentlyOpen =
-    chat.chatStatus === "open" ||
-    chat.status === "active" ||
-    chat.tradeStatus === "pending";
-
-  if (!isCurrentlyOpen) {
-    // Suppress badge for truly closed/rejected chats whose last activity is a system event
-    const isClosed =
-      chat.chatStatus === "closed" ||
-      chat.status === "closed" ||
-      chat.status === "reject" ||
-      chat.tradeStatus === "rejected";
-
-    if (isClosed) {
-      if (
-        chat.lastMessageSender === "system" ||
-        !chat.lastMessageSender ||
-        String(chat.lastMessage || "").toLowerCase().includes("closed")
-      ) {
-        return 0;
-      }
+  // Rejected/approved-but-open chats still receive messages; only a closed flag suppresses.
+  if (isTradeChatClosed(chat)) {
+    if (
+      chat.lastMessageSender === "system" ||
+      !chat.lastMessageSender ||
+      String(chat.lastMessage || "").toLowerCase().includes("closed")
+    ) {
+      return 0;
     }
   }
 
@@ -265,6 +328,8 @@ export const getChatUnreadCount = (chat: any): number => {
   );
   return Math.max(0, isNaN(count) ? 0 : Math.floor(count));
 };
+
+export const getRawChatUnreadCount = getChatUnreadCount;
 
 /**
  * Send a message in a chat.
@@ -281,10 +346,7 @@ export const sendMessage = async (
     const chatSnap = await getDoc(doc(db, CHATS_COLLECTION, chatId));
     if (chatSnap.exists()) {
       const chatData = chatSnap.data();
-      const isClosed =
-        chatData?.chatStatus === "closed" ||
-        chatData?.isClosed === true;
-      if (isClosed) {
+      if (isTradeChatClosed({ ...chatData, chatId })) {
         throw new Error("CHAT_CLOSED");
       }
     }
@@ -304,7 +366,7 @@ export const sendMessage = async (
   // Update the chat's last message and unread counts
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   const updateData: Record<string, any> = {
-    lastMessage: messageData.type === "image" ? "Ã°Å¸â€œÂ· Image" : messageData.text,
+    lastMessage: messageData.type === "image" ? "📷 Image" : messageData.text,
     lastMessageAt: serverTimestamp(),
     lastMessageSender: messageData.senderType,
     updatedAt: serverTimestamp(),
@@ -318,7 +380,7 @@ export const sendMessage = async (
     updateData.unread_count = 0;
     updateData.unread = 0;
     // Asynchronously mark all existing unread messages in backend as read by user
-    markAllMessagesReadByUser(chatId).catch(() => {});
+    markAllMessagesReadByUser(chatId).catch(() => { });
   } else if (messageData.senderType === "agent") {
     // Only increment customer count if customer is NOT currently viewing this chat
     if (!isViewingChat(chatId)) {
@@ -477,7 +539,7 @@ export const subscribeToUserChats = (
 
   if (ids.length === 0) {
     callback([]);
-    return () => {};
+    return () => { };
   }
 
   const chatsRef = collection(db, CHATS_COLLECTION);
@@ -494,19 +556,9 @@ export const subscribeToUserChats = (
       })) as ChatDocument[];
 
       // Client-side filtering and sorting to bypass composite index constraints
-      const filteredAndSorted = chats
-        .filter((c) => c.chatStatus !== "deleted")
-        .sort((a, b) => {
-          const getMillis = (ts: any) => {
-            if (!ts) return 0;
-            if (typeof ts.toMillis === "function") return ts.toMillis();
-            if (ts.seconds) return ts.seconds * 1000 + (ts.nanoseconds || 0) / 1e6;
-            if (typeof ts === "string") return new Date(ts).getTime();
-            if (ts instanceof Date) return ts.getTime();
-            return 0;
-          };
-          return getMillis(b.lastMessageAt) - getMillis(a.lastMessageAt);
-        });
+      const filteredAndSorted = sortCustomerChatList(
+        chats.filter((c) => c.chatStatus !== "deleted"),
+      );
 
       callback(filteredAndSorted);
     },
@@ -591,24 +643,25 @@ export const updateChatPushToken = async (
  * Gift Card Support (support_*) chats can never be closed.
  */
 export const closeChat = async (chatId: string): Promise<void> => {
-  // Gift Card Support threads can NEVER be closed
-  if (chatId.startsWith("support_")) {
+  const chatRef = doc(db, CHATS_COLLECTION, chatId);
+
+  const snap = await getDoc(chatRef);
+  if (!snap.exists()) return;
+  const current = { ...snap.data(), chatId: snap.id };
+
+  if (isGiftCardSupportChat(current) || chatId.startsWith("support_")) {
     console.log("[FirebaseChat] Gift Card Support cannot be closed.");
     return;
   }
-
-  const chatRef = doc(db, CHATS_COLLECTION, chatId);
-
-  // Fetch current doc to check if already closed
-  const snap = await getDoc(chatRef);
-  if (!snap.exists()) return;
-  const current = snap.data();
-  if (current?.chatStatus === "closed" || current?.isClosed === true) {
+  if (isTradeChatClosed(current)) {
     console.log("[FirebaseChat] Chat already closed, skipping.");
     return;
   }
+  if (!hasTradeDecision(current)) {
+    throw new Error("CHAT_NOT_CLOSABLE");
+  }
 
-  // Close the chat — preserve tradeStatus exactly as-is
+  // Close the chat — preserve tradeStatus exactly as-is (do not write tradeStatus)
   await updateDoc(chatRef, {
     chatStatus: "closed",
     isClosed: true,
@@ -621,7 +674,15 @@ export const closeChat = async (chatId: string): Promise<void> => {
  * Resets tradeStatus to "pending", opens the chat, clears isClosed.
  */
 export const reopenChat = async (chatId: string): Promise<void> => {
+  if (chatId.startsWith("support_")) {
+    console.log("[FirebaseChat] Gift Card Support cannot be reopened or closed.");
+    return;
+  }
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
+  const snap = await getDoc(chatRef);
+  if (snap.exists() && isGiftCardSupportChat({ ...snap.data(), chatId: snap.id })) {
+    return;
+  }
   await updateDoc(chatRef, {
     chatStatus: "open",
     isClosed: false,
@@ -714,12 +775,7 @@ export const findActiveUnassignedSupportChat = (
         c.cardName === "Gift Card Support" ||
         Boolean(c.chatId?.startsWith("support_"));
       if (!isSupport) return false;
-      const isClosed =
-        c.chatStatus === "closed" ||
-        (c as any).status === "closed" ||
-        (c as any).status === "resolved" ||
-        (c as any).tradeStatus === "closed";
-      if (isClosed) return false;
+      if (isTradeChatClosed(c)) return false;
       const assignedVal = c.assignedAgent || (c as any).assignedTo || null;
       const hasAgent = Boolean(
         assignedVal &&

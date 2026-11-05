@@ -14,7 +14,7 @@ import { MessageCircle, X } from "lucide-react-native";
 import { useAppSelector } from "@/redux/store";
 import {
   subscribeToUserChats,
-  getChatUnreadCount,
+  getRawChatUnreadCount,
   updateChatPushToken,
   type ChatDocument,
 } from "@/lib/firebase-chat-service";
@@ -166,7 +166,7 @@ export const InAppNotificationBanner = () => {
     const unsubscribe = subscribeToUserChats(candidateIds, (chats) => {
       chats.forEach((chatData) => {
         const chatId = chatData.chatId;
-        const newCount = getChatUnreadCount(chatData);
+        const newCount = getRawChatUnreadCount(chatData);
         const prevCount = unreadCountsRef.current[chatId] ?? 0;
 
         // Dismiss tray notification if conversation was read (e.g. read synced from another device)
@@ -205,6 +205,7 @@ export const InAppNotificationBanner = () => {
           chatData.lastMessage?.toLowerCase().includes("welcome");
 
         const isClosed =
+          chatData.isClosed === true ||
           chatData.chatStatus === "closed" ||
           (chatData as any).status === "closed";
 

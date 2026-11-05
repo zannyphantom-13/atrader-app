@@ -38,7 +38,7 @@ import { useTheme } from "@/context/ThemeProvider";
 
 import { useFirebaseChat } from "@/hooks/useFirebaseChat";
 
-import { createTradeChat, updateChatPushToken, type MessageDocument } from "@/lib/firebase-chat-service";
+import { createTradeChat, updateChatPushToken, isGiftCardSupportChat, isTradeChatClosed, type MessageDocument } from "@/lib/firebase-chat-service";
 
 import { useAppSelector } from "@/redux/store";
 
@@ -630,17 +630,13 @@ const TradeChat = () => {
 
   }));
 
-  const isSupportChat =
-
-    Boolean(chatId?.startsWith("support_")) ||
-
-    params.isSupport === "true" ||
-
-    params.cardCategory === "Support" ||
-
-    chatInfo?.type === "support" ||
-
-    (!params.tradeId && !chatInfo?.tradeId);
+  const isSupportChat = isGiftCardSupportChat({
+    chatId,
+    type: chatInfo?.type,
+    cardCategory: chatInfo?.cardCategory || params.cardCategory,
+    cardName: chatInfo?.cardName || params.cardName,
+    isSupport: params.isSupport,
+  });
 
   const agentDisplayName = chatInfo?.assignedAgentName || "Atrader customer support";
 
@@ -745,10 +741,7 @@ const TradeChat = () => {
 
   const isDocActive =
     (chatInfo?.chatStatus === "open" || (chatInfo as any)?.status === "active") &&
-    chatInfo?.chatStatus !== "closed" &&
-    (chatInfo as any)?.isClosed !== true &&
-    (chatInfo as any)?.status !== "closed" &&
-    (chatInfo as any)?.status !== "reject";
+    !isTradeChatClosed(chatInfo);
 
   const isExplicitlyReopened =
     lastReopenMsgIdx !== -1 && lastReopenMsgIdx > latestResolutionIdx;
@@ -760,12 +753,8 @@ const TradeChat = () => {
 
   const isChatReopened = isExplicitlyReopened || isDocActiveAfterReopen;
 
-  // Canonical isClosed: driven purely by Firestore fields (isClosed flag takes priority)
-  const isDocClosed =
-    (chatInfo as any)?.isClosed === true ||
-    chatInfo?.chatStatus === "closed" ||
-    (chatInfo as any)?.status === "closed" ||
-    (chatInfo as any)?.status === "reject";
+  // Canonical isClosed: isClosed/chatStatus only — never reject/approve, never a displayed status
+  const isDocClosed = isTradeChatClosed(chatInfo);
 
   // Normalize trade status — Firestore is the single source of truth.
   // After a reopen, tradeStatus is reset to "pending" in Firestore, so
@@ -819,15 +808,8 @@ const TradeChat = () => {
           (chatInfo as any)?.status === "cancel" ||
           lastCancelMsgIdx !== -1));
 
-  // 4. Closed: driven by isClosed flag (set above) — separate from tradeStatus
-  // isDocClosed is now defined above for reopen detection.
-  // isChatClosed means the input is hidden; it does NOT affect the trade banner.
-  const isHistoryClosed =
-    latestResolutionIdx !== -1 && latestResolutionIdx >= lastReopenMsgIdx;
-
-  const isChatClosed =
-    !isChatReopened &&
-    (isDocClosed || isHistoryClosed);
+  // 4. Closed: separate flag from tradeStatus. Approve/Reject messages do NOT close the chat.
+  const isChatClosed = !isSupportChat && isDocClosed;
 
   // 5. Just Closed: closed without Approve or Reject (admin used Close directly — not allowed by new rules, but keep for legacy data)
   const isTradeJustClosed =
@@ -843,8 +825,7 @@ const TradeChat = () => {
   // - "Successful" (green) when approved
   // - "Rejected" (red) when rejected
   // - "Cancelled" (red) when cancelled
-  // Note: "Closed" is intentionally NOT shown here — when a chat is closed its underlying
-  // trade result (Pending/Successful/Rejected/Cancelled) is displayed instead.
+  // Note: "Closed" is never shown — closing keeps Successful/Rejected as the result.
   const displayStatusText = isChatReopened
     ? "Pending"
     : isTradeApproved
@@ -2300,7 +2281,7 @@ const TradeChat = () => {
 
                     <ThemedText
 
-                      family="primary"
+                      family="secondary"
 
                       weight="medium"
 
@@ -2326,11 +2307,11 @@ const TradeChat = () => {
 
                         : `$${formatNumber(chatInfo?.cardAmount || params.cardAmount || "0")}`} ~ {tradeData?.estimated
 
-                          ? `â‚¦${formatNumber(tradeData.estimated)}`
+                          ? `₦${formatNumber(tradeData.estimated)}`
 
-                          : `â‚¦${formatNumber(chatInfo?.settlementAmount || params.settlementAmount || "0")}`}
+                          : `₦${formatNumber(chatInfo?.settlementAmount || params.settlementAmount || "0")}`}
 
-                      {tradeData?.rate ? ` (@ â‚¦${tradeData.rate})` : ""}
+                      {tradeData?.rate ? ` (@ ₦${tradeData.rate})` : ""}
 
                     </ThemedText>
 
@@ -2831,7 +2812,7 @@ const TradeChat = () => {
               - Support chats: always visible
           */}
 
-          {isChatClosed && (isTradeApproved || isTradeRejected) && !isChatReopened ? (
+          {!isSupportChat && isChatClosed ? (
 
             <View
               onLayout={(e) => setInputBarHeight(e.nativeEvent.layout.height)}

@@ -97,21 +97,11 @@ export function computeUnreadSnapshot(
     }
   }
 
-  // 1. Try explicit read flag on messages
-  const explicitlyUnread = incomingMessages.filter((m) => {
-    if (currentUserRole === "customer") {
-      return m.readByUser === false;
-    }
-    return m.readByAgent === false;
-  });
-
-  if (explicitlyUnread.length > 0) {
-    explicitlyUnread.forEach((m) => {
-      if (m.id) unreadIds.add(m.id);
-    });
-  } else if (rawUnreadCount > 0 && incomingMessages.length > 0) {
-    // 2. Take the last N incoming messages
-    const targetMessages = incomingMessages.slice(-rawUnreadCount);
+  const n = Math.max(0, Math.floor(Number(rawUnreadCount) || 0));
+  // Chat-doc counter is the source of truth. Never treat the whole history as unread
+  // just because older messages lack / still have a read flag.
+  if (n > 0 && incomingMessages.length > 0) {
+    const targetMessages = incomingMessages.slice(-n);
     targetMessages.forEach((m) => {
       if (m.id) unreadIds.add(m.id);
     });
