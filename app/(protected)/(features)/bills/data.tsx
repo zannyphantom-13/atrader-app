@@ -57,7 +57,7 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const planType = ["Daily", "Weekly", "Monthly", "Yearly"];
+
 
 const dataSchema = z.object({
   number: z
@@ -80,14 +80,26 @@ const Data = () => {
   const { width: deviceWidth } = Dimensions.get("window");
   const [selectedAmount, setSelectedAmount] = React.useState("");
   const router = useRouter();
-  const [activePlanType, setActivePlanType] = React.useState(planType[1]);
   const [formData, setFormData] = React.useState({
     number: "",
     amount: "",
     network: networkTypes[0].id,
     planId: "",
-    plan_type: "",
+    plan_type: "Daily",
   });
+
+  const availableCategories = React.useMemo(() => {
+    return CowrieService.getPlanCategories(formData.network || activeNetwork?.id || "mtn");
+  }, [formData.network, activeNetwork]);
+
+  const [activePlanType, setActivePlanType] = React.useState<string>("Daily");
+
+  // Keep active category in sync if the network changes and category isn't available
+  React.useEffect(() => {
+    if (availableCategories.length > 0 && !availableCategories.includes(activePlanType)) {
+      setActivePlanType(availableCategories[0]);
+    }
+  }, [availableCategories]);
   const maxLength = 4;
   const [selectedBeneficiary, setSelectedBeneficiary] =
     React.useState<bentypes>({
@@ -185,13 +197,12 @@ const Data = () => {
 
   const [isCowrieLoading, setIsCowrieLoading] = React.useState(false);
 
-  const getPlanTypeData = async (network: string) => {
-    // Load Cowrie VAS bundles for current network & active plan duration (Daily, Weekly, Monthly)
-    const cowrieBundles = CowrieService.getDataPlans(network, activePlanType);
-    if (cowrieBundles && cowrieBundles.length > 0) {
-      setPlanTypeData(cowrieBundles);
-    }
+  const getPlanTypeData = async (network: string, category: string) => {
+    // 1. Primary authoritative Cowrie plans for the selected network and category
+    const cowrieBundles = CowrieService.getDataPlans(network, category);
+    setPlanTypeData(cowrieBundles);
 
+    // 2. Check backend in background if available
     const atex = await TokenManager.getToken();
     if (atex) {
       try {
@@ -199,27 +210,21 @@ const Data = () => {
           data: {
             token: atex,
             network: network || "mtn",
-            time: activePlanType || "Weekly",
+            time: category || "Weekly",
           },
         }).unwrap();
 
         if (response.status === "success" && response.data_plans && response.data_plans.length > 0) {
           setPlanTypeData(response.data_plans);
-          console.log("Plan Type Data:", response);
-        } else if (!cowrieBundles || cowrieBundles.length === 0) {
-          setPlanTypeData(null);
         }
       } catch (error: any) {
-        if (!cowrieBundles || cowrieBundles.length === 0) {
-          setPlanTypeData(null);
-        }
-        console.error("Error fetching plan type data from backend:", error);
+        // Fallback to cowrieBundles
       }
     }
   };
 
   React.useEffect(() => {
-    getPlanTypeData(formData.network);
+    getPlanTypeData(formData.network, activePlanType);
   }, [formData.network, activePlanType]);
 
   const PurchaseData = async () => {
@@ -587,11 +592,14 @@ const Data = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingRight: 24 }}
               >
-                {planType.map((plan, index) => (
+                {availableCategories.map((plan, index) => (
                   <Pressable
                     key={index}
-                    className={`flex-row items-center justify-center bg-light-150 dark:bg-dark-900 py-[8px] px-[20px] rounded-full mr-2 ${activePlanType === plan ? "border border-primary-500" : "border border-border-light dark:border-border-dark"
-                      }`}
+                    className={`flex-row items-center justify-center bg-light-150 dark:bg-dark-900 py-[8px] px-[20px] rounded-full mr-2 ${
+                      activePlanType === plan
+                        ? "border border-primary-500 bg-primary-50 dark:bg-primary-950/30"
+                        : "border border-border-light dark:border-border-dark"
+                    }`}
                     onPress={() => {
                       setActivePlanType(plan);
                       setFormData((prev) => ({ ...prev, plan_type: plan }));
@@ -599,11 +607,11 @@ const Data = () => {
                   >
                     <ThemedText
                       family="primary"
-                      variant="primary"
+                      variant={activePlanType === plan ? "primary" : "secondary"}
                       weight="medium"
-                      className="text-b2"
+                      className={`text-b2 ${activePlanType === plan ? "text-primary-500 font-bold" : ""}`}
                     >
-                      {plan.charAt(0).toUpperCase() + plan.slice(1)}
+                      {plan}
                     </ThemedText>
                   </Pressable>
                 ))}
@@ -621,28 +629,41 @@ const Data = () => {
                 renderItem={({ item, index }) => (
                   <Pressable
                     key={index}
-                    className={`flex-row justify-between items-center p-4 mb-2 rounded-[30px] 
-                      ${formData.planId === item.plan_id ? "bg-[#E8FFE4] dark:bg-[#0B2E02] border border-primary-500 " : "bg-light-150 dark:bg-dark-900 border border-border-light dark:border-border-dark"}
-                    `}
+                    className={`flex-row justify-between items-center p-4 mb-2 rounded-[24px] ${
+                      formData.planId === item.plan_id
+                        ? "bg-[#E8FFE4] dark:bg-[#0B2E02] border border-primary-500 "
+                        : "bg-light-150 dark:bg-dark-900 border border-border-light dark:border-border-dark"
+                    }`}
                     onPress={() => {
                       handleAmountandId(item.amount, item.plan_id);
                     }}
                   >
-                    <View>
+                    <View className="flex-1 pr-3">
                       <ThemedText
-                        className={`text-b2 font-medium ${selectedAmount === item.amount ? "" : ""}`}
+                        className={`text-b2 font-primary-bold ${formData.planId === item.plan_id ? "text-black dark:text-white" : ""}`}
                       >
-                        {item.size} - {item.duration}
+                        {item.name || `${item.size} - ${item.duration}`}
                       </ThemedText>
                       <ThemedText
-                        className={`text-b3 text-gray-600 ${selectedAmount === item.amount ? "" : ""}`}
+                        className="text-xs text-gray-500 dark:text-gray-400 mt-1"
+                        numberOfLines={2}
                       >
-                        ₦{item.amount}
+                        {item.description ? `${item.duration} • ${item.description}` : item.duration}
                       </ThemedText>
                     </View>
-                    {selectedAmount === item.amount && (
-                      <ThemedText className="text-white font-bold">✓</ThemedText>
-                    )}
+                    <View className="items-end">
+                      <ThemedText
+                        family="secondary"
+                        className="text-b1 font-bold text-primary-500"
+                      >
+                        ₦{Number(item.amount).toLocaleString()}
+                      </ThemedText>
+                      {formData.planId === item.plan_id && (
+                        <ThemedText className="text-primary-500 text-xs font-bold mt-0.5">
+                          ✓ Selected
+                        </ThemedText>
+                      )}
+                    </View>
                   </Pressable>
                 )}
                 keyExtractor={(item) => item.plan_id.toString()}
