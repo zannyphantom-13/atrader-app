@@ -251,7 +251,16 @@ const Data = () => {
         return;
       }
 
-      // 2. Fallback to existing backend API if Cowrie failed
+      // If Cowrie was configured, report its error directly — do NOT silently fall back to sandbox backend!
+      if (CowrieService.isConfigured()) {
+        setShowDataModal(false);
+        setPin("");
+        console.error("Cowrie Data Purchase Failed:", cowrieRes);
+        toast.showToast(cowrieRes.message || "Data Purchase Failed", "error");
+        return;
+      }
+
+      // 2. Fallback to existing backend API if Cowrie is unconfigured
       const atex = await TokenManager.getToken();
       if (atex) {
         const response: any = await buyData({

@@ -378,11 +378,11 @@ class CowrieAirtimeService {
   }
 
   public get clientId(): string {
-    return process.env.EXPO_PUBLIC_COWRIE_CLIENT_ID || "me@client.com";
+    return process.env.EXPO_PUBLIC_COWRIE_CLIENT_ID || "myatraderapp.com";
   }
 
   public get clientKey(): string {
-    return process.env.EXPO_PUBLIC_COWRIE_CLIENT_KEY || "dGVzdF9jbGllbnRfa2V5X2Jhc2U2NA==";
+    return process.env.EXPO_PUBLIC_COWRIE_CLIENT_KEY || "MiynrnmHWvsgV6/HJ6vEppK3mFu456n9M3TJ3NWAh3g=";
   }
 
   /**
@@ -527,27 +527,14 @@ class CowrieAirtimeService {
 
     console.log(`[CowrieService] Credit Request: net=${net}, msisdn=${msisdn}, amount=${amount}, xref=${xref}`);
 
-    // If using test / placeholder credentials, simulate successful response for UI testing
+    // If credentials are not configured, fail explicitly
     if (!this.isConfigured()) {
-      console.warn(
-        `[CowrieService] Test/Placeholder Mode (ClientId: ${this.clientId}). Simulating successful airtime topup.`
-      );
-      await new Promise((r) => setTimeout(r, 600));
+      console.error(`[CowrieService] Cowrie credentials not configured.`);
       return {
-        success: true,
-        status: "success",
-        id: "SIM-" + Date.now().toString(16).toUpperCase(),
-        transid: xref,
+        success: false,
+        status: "failed",
         reference: xref,
-        message: "Airtime Topup Completed (Cowrie Sandbox)",
-        data: {
-          id: "SIM-" + Date.now().toString(16).toUpperCase(),
-          net,
-          msisdn,
-          amount,
-          xref,
-          message: "OK",
-        },
+        message: "Cowrie VAS service not configured",
       };
     }
 
@@ -621,27 +608,14 @@ class CowrieAirtimeService {
 
     console.log(`[CowrieService] Data Request: net=${net}, msisdn=${msisdn}, amount=${amount}, bundle=${bundle}, xref=${xref}`);
 
-    // If using test / placeholder credentials, simulate successful response for UI testing
+    // If credentials are not configured, fail explicitly
     if (!this.isConfigured()) {
-      console.warn(
-        `[CowrieService] Test/Placeholder Mode (ClientId: ${this.clientId}). Simulating successful data topup.`
-      );
-      await new Promise((r) => setTimeout(r, 600));
+      console.error(`[CowrieService] Cowrie credentials not configured.`);
       return {
-        success: true,
-        status: "success",
-        id: "SIM-" + Date.now().toString(16).toUpperCase(),
-        transid: xref,
+        success: false,
+        status: "failed",
         reference: xref,
-        message: `Data plan (${bundle}) activated successfully (Cowrie Sandbox)`,
-        data: {
-          id: "SIM-" + Date.now().toString(16).toUpperCase(),
-          net,
-          msisdn,
-          amount,
-          bundle,
-          xref,
-        },
+        message: "Cowrie VAS service not configured",
       };
     }
 
