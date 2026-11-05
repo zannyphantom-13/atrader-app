@@ -16,7 +16,7 @@ import { app_config } from "@/utils/config";
 import { formatNumber, getCurrencySymbol } from "@/utils/formatamount";
 import { paths } from "@/utils/paths";
 import { TokenManager } from "@/utils/secure-store-adapter";
-import { getLocalTransactionById } from "@/services/local-transaction-service";
+import { getLocalTransactionById, formatTransactionDate } from "@/services/local-transaction-service";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -278,7 +278,7 @@ const AllDetailTransaction = () => {
     if (!data) return [];
 
     const commonBefore = [
-      { label: "Date", value: data?.plan_date || data?.date },
+      { label: "Date", value: formatTransactionDate(data?.plan_date || data?.date) },
     ];
     const commonAfter = [
       { label: "Transaction ID", value: data?.transid, isCopyable: true },

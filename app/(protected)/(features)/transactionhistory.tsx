@@ -5,7 +5,7 @@ import { TransactionSkeleton } from "@/components/skeletons/transactionskeleton"
 import { ThemedText } from "@/components/theme/themeText";
 import { ThemedView } from "@/components/theme/themeView";
 import { defaultCategories } from "@/constant/data";
-import { getLocalTransactions } from "@/services/local-transaction-service";
+import { getLocalTransactions, formatTransactionDate } from "@/services/local-transaction-service";
 import { img } from "@/constant/image";
 import { useTheme } from "@/context/ThemeProvider";
 import { useGetAllTransactionMutation } from "@/redux/transaction/transaction_history";
@@ -74,7 +74,7 @@ const TransactionItem = ({ transaction }: { transaction: any }) => {
             family="primary"
             weight="medium"
           >
-            {transaction?.plan_date || transaction?.date}
+            {formatTransactionDate(transaction?.plan_date || transaction?.date)}
           </ThemedText>
         </View>
       </View>

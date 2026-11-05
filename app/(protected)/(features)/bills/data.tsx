@@ -30,7 +30,7 @@ import { app_config } from "@/utils/config";
 import { paths } from "@/utils/paths";
 import { TokenManager } from "@/utils/secure-store-adapter";
 import { CowrieService } from "@/services/cowrie-service";
-import { saveLocalTransaction } from "@/services/local-transaction-service";
+import { saveLocalTransaction, formatTransactionDate } from "@/services/local-transaction-service";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -230,6 +230,7 @@ const Data = () => {
         setPin("");
         setTransactionId(cowrieRes.transid || cowrieRes.reference || "");
         const tid = cowrieRes.transid || cowrieRes.reference || ("DAT-" + Date.now().toString(16).toUpperCase());
+        const formattedDate = formatTransactionDate(new Date());
         const receipt = {
           id: tid,
           transid: tid,
@@ -241,8 +242,8 @@ const Data = () => {
           amount: formData.amount,
           plan_status: 1,
           status: "success",
-          plan_date: new Date().toISOString(),
-          date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+          plan_date: formattedDate,
+          date: formattedDate,
         };
         await saveLocalTransaction(receipt);
         setCowrieReceiptData(receipt);

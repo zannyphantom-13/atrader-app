@@ -8,7 +8,7 @@ import { useAuth } from "@/guards/guard";
 import { ServiceIcon } from "@/components/customs/serviceIcon";
 import PickTypeModal from "@/components/modals/pick-giftcard-crypto";
 import { TransactionSkeleton } from "@/components/skeletons/transactionskeleton";
-import { getLocalTransactions } from "@/services/local-transaction-service";
+import { getLocalTransactions, formatTransactionDate } from "@/services/local-transaction-service";
 import { useAppSelector } from "@/redux/store";
 import { useGetAllTransactionMutation } from "@/redux/transaction/transaction_history";
 import app_colors from "@/styles/color";
@@ -204,7 +204,7 @@ const TransactionItem = ({ transaction }: { transaction: any }) => {
             family="primary"
             weight="medium"
           >
-            {transaction?.plan_date || transaction?.date}
+            {formatTransactionDate(transaction?.plan_date || transaction?.date)}
           </ThemedText>
         </View>
       </View>

@@ -26,9 +26,15 @@ const STORAGE_KEY = "@atrader_local_transactions";
  */
 export async function saveLocalTransaction(tx: LocalTransaction): Promise<void> {
   try {
+    const formatted = formatTransactionDate(tx.plan_date || tx.date || new Date());
+    const normalizedTx: LocalTransaction = {
+      ...tx,
+      plan_date: formatted,
+      date: formatted,
+    };
     const existing = await getLocalTransactions();
     const updated = [
-      tx,
+      normalizedTx,
       ...existing.filter((item) => (item.transid || item.id) !== (tx.transid || tx.id)),
     ].slice(0, 100);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -44,7 +50,12 @@ export async function getLocalTransactions(): Promise<LocalTransaction[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw);
+    const list: LocalTransaction[] = JSON.parse(raw);
+    return list.map((tx) => ({
+      ...tx,
+      plan_date: formatTransactionDate(tx.plan_date || tx.date),
+      date: formatTransactionDate(tx.date || tx.plan_date),
+    }));
   } catch (error) {
     console.error("[LocalTransactionService] Failed to get transactions:", error);
     return [];
@@ -72,3 +83,21 @@ export async function getLocalTransactionById(
   }
 }
 
+
+/**
+ * Format any date string (ISO timestamp, Date object, etc.) to standard backend format "YYYY-MM-DD HH:mm:ss"
+ */
+export function formatTransactionDate(dateStr?: string | Date | null): string {
+  if (!dateStr) return "";
+  if (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  try {
+    const d = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+    if (d instanceof Date && !isNaN(d.getTime())) {
+      const pad = (n: number) => (n < 10 ? "0" + n : n);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+  } catch {}
+  return String(dateStr);
+}
