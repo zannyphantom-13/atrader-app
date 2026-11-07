@@ -8,7 +8,7 @@ import { useAuth } from "@/guards/guard";
 import { ServiceIcon } from "@/components/customs/serviceIcon";
 import PickTypeModal from "@/components/modals/pick-giftcard-crypto";
 import { TransactionSkeleton } from "@/components/skeletons/transactionskeleton";
-import { getLocalTransactions, formatTransactionDate } from "@/services/local-transaction-service";
+import { getLocalTransactions, formatTransactionDate, parseTransactionTime } from "@/services/local-transaction-service";
 import { useAppSelector } from "@/redux/store";
 import { useGetAllTransactionMutation } from "@/redux/transaction/transaction_history";
 import app_colors from "@/styles/color";
@@ -353,6 +353,12 @@ const Home = () => {
           merged.push(item);
         }
       }
+      // Sort chronologically (newest first)
+      merged.sort((a, b) => {
+        const timeA = parseTransactionTime(a?.plan_date || a?.date || a?.created_at);
+        const timeB = parseTransactionTime(b?.plan_date || b?.date || b?.created_at);
+        return timeB - timeA;
+      });
       setTransactions(merged.slice(0, 5));
       console.log(response)
     } catch (error) {

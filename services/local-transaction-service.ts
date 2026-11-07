@@ -101,3 +101,18 @@ export function formatTransactionDate(dateStr?: string | Date | null): string {
   } catch {}
   return String(dateStr);
 }
+
+/**
+ * Safely parse a transaction timestamp into milliseconds for sorting.
+ * Works with ISO strings, Date objects, and "YYYY-MM-DD HH:mm:ss" formats.
+ */
+export function parseTransactionTime(dateStr?: string | Date | null): number {
+  if (!dateStr) return 0;
+  if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? 0 : dateStr.getTime();
+  if (typeof dateStr === "string") {
+    const normalized = dateStr.trim().replace(" ", "T");
+    const t = new Date(normalized).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  return 0;
+}

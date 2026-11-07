@@ -5,7 +5,7 @@ import { TransactionSkeleton } from "@/components/skeletons/transactionskeleton"
 import { ThemedText } from "@/components/theme/themeText";
 import { ThemedView } from "@/components/theme/themeView";
 import { defaultCategories } from "@/constant/data";
-import { getLocalTransactions, formatTransactionDate } from "@/services/local-transaction-service";
+import { getLocalTransactions, formatTransactionDate, parseTransactionTime } from "@/services/local-transaction-service";
 import { img } from "@/constant/image";
 import { useTheme } from "@/context/ThemeProvider";
 import { useGetAllTransactionMutation } from "@/redux/transaction/transaction_history";
@@ -193,11 +193,25 @@ const Transactionhistory = () => {
 
         // Retrieve locally stored transactions (e.g. airtime / data)
         const localAll = await getLocalTransactions();
+        const getItemTime = (item: any): number => {
+          return parseTransactionTime(item?.plan_date || item?.date || item?.created_at);
+        };
+
         const filteredLocal = localAll.filter((lt) => {
           if (selectedCategory && lt.role?.toLowerCase() !== selectedCategory.toLowerCase()) return false;
           if (selectedStatus) {
             const st = lt.plan_status === 1 ? "successful" : lt.plan_status === 0 ? "pending" : "failed";
             if (st !== selectedStatus.toLowerCase()) return false;
+          }
+          if (selectedDateRange.from) {
+            const t = getItemTime(lt);
+            const startOfDay = new Date(selectedDateRange.from).setHours(0, 0, 0, 0);
+            if (t < startOfDay) return false;
+          }
+          if (selectedDateRange.to) {
+            const t = getItemTime(lt);
+            const endOfDay = new Date(selectedDateRange.to).setHours(23, 59, 59, 999);
+            if (t > endOfDay) return false;
           }
           return true;
         });
@@ -206,21 +220,16 @@ const Transactionhistory = () => {
           setData((prev: any[]) => {
             const prevIds = new Set(prev.map((p) => (p.transid || p.id)?.toString()));
             const newItems = serverTransactions.filter((s: any) => !prevIds.has((s.transid || s.id)?.toString()));
-            return [...prev, ...newItems];
+            const combined = [...prev, ...newItems];
+            combined.sort((a, b) => getItemTime(b) - getItemTime(a));
+            return combined;
           });
         } else {
           const seenIds = new Set<string>();
           const merged: any[] = [];
 
-          for (const item of filteredLocal) {
-            const key = (item.transid || item.id)?.toString();
-            if (key && !seenIds.has(key)) {
-              seenIds.add(key);
-              merged.push(item);
-            }
-          }
-
-          for (const item of serverTransactions) {
+          // Combine both local and server transactions
+          for (const item of [...filteredLocal, ...serverTransactions]) {
             const key = (item.transid || item.id)?.toString();
             if (key && !seenIds.has(key)) {
               seenIds.add(key);
@@ -229,6 +238,9 @@ const Transactionhistory = () => {
               merged.push(item);
             }
           }
+
+          // Sort chronologically (newest first)
+          merged.sort((a, b) => getItemTime(b) - getItemTime(a));
 
           setData(merged);
         }
@@ -250,6 +262,7 @@ const Transactionhistory = () => {
               if (selectedCategory && lt.role?.toLowerCase() !== selectedCategory.toLowerCase()) return false;
               return true;
             });
+            filteredLocal.sort((a, b) => parseTransactionTime(b?.plan_date || b?.date) - parseTransactionTime(a?.plan_date || a?.date));
             if (filteredLocal.length > 0) setData(filteredLocal);
           } catch (e) {}
         }
